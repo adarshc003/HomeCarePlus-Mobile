@@ -1,0 +1,610 @@
+import React, {
+  useState,
+  useEffect,
+  useRef,
+} from 'react';
+
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+} from 'react-native';
+
+import {verifyOTP, sendOTP} from '../../services/firebaseAuth';
+
+import {firebaseLogin} from '../../services/authService';
+
+import {reregisterFCMToken} from '../../services/notificationService';
+
+import {useAuthStore} from '../../store/authStore';
+import {showSuccess, showError} from '../../utils/showToast';
+
+import {useLanguageStore} from '../../store/languageStore';
+
+import {t} from '../../i18n';
+
+import {Fonts} from '../../constants/fonts';
+
+import Ionicons from '@react-native-vector-icons/ionicons';
+
+const OtpScreen = ({
+  navigation,
+  route,
+}: any) => {
+  const {phone, confirmation, redirectTo} = route.params;
+
+  const login = useAuthStore(state => state.login);
+
+  const [otp, setOtp] = useState('');
+  const [timer, setTimer] = useState(30);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [currentConfirmation, setCurrentConfirmation] =
+    useState(confirmation);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  const language = useLanguageStore(state => state.language);
+
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const progressAnim = useRef(new Animated.Value(1)).current;
+
+  // ── Timer countdown ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (timer <= 0) {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setTimer(prev => prev - 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [timer]);
+
+  // ── Timer progress bar ────────────────────────────────────────────────────
+  useEffect(() => {
+    progressAnim.setValue(1);
+
+    Animated.timing(progressAnim, {
+      toValue: 0,
+      duration: 30000,
+      useNativeDriver: false,
+    }).start();
+  }, [currentConfirmation]);
+
+  // ── Shake on error ────────────────────────────────────────────────────────
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, {toValue: 8,  duration: 55, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -8, duration: 55, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 6,  duration: 55, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: -6, duration: 55, useNativeDriver: true}),
+      Animated.timing(shakeAnim, {toValue: 0,  duration: 55, useNativeDriver: true}),
+    ]).start();
+  };
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleVerifyOtp = async () => {
+    if (!otp) {
+      setError(t('otpRequired', language));
+      triggerShake();
+      return;
+    }
+
+    if (otp.length !== 6) {
+      setError(t('enterValid6DigitOtp', language));
+      triggerShake();
+      return;
+    }
+
+    setError('');
+
+    try {
+      setLoading(true);
+
+      const result = await verifyOTP(currentConfirmation, otp);
+
+      console.log('Firebase User:', result.user.phoneNumber);
+
+      const firebasePhone = result.user.phoneNumber;
+
+      const phoneWithoutCode = firebasePhone?.replace('+91', '');
+
+      const response = await firebaseLogin(phoneWithoutCode);
+
+      await login(
+        response.data.token,
+        response.data.user,
+        phoneWithoutCode,
+      );
+
+      // The app-start FCM registration attempt (NotificationProvider) runs
+      // before login on a fresh install and is never retried — re-send the
+      // already-obtained token now that a valid session exists, so the
+      // very first booking after this login can actually notify.
+      await reregisterFCMToken();
+
+      showSuccess(t('loginSuccessful', language), t('welcomeBack', language));
+
+      if (redirectTo) {
+        navigation.replace(redirectTo);
+      } else {
+        navigation.replace('Home');
+      }
+    } catch (error: any) {
+      console.log(error);
+
+      setError(error?.message || t('invalidOtp', language));
+      triggerShake();
+
+      showError(t('failed', language), t('invalidOtp', language));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    try {
+      setResendLoading(true);
+
+      const newConfirmation = await sendOTP(`+91${phone}`);
+
+      setCurrentConfirmation(newConfirmation);
+      setTimer(30);
+
+      showSuccess(t('otpSentTitle', language), t('newOtpSent', language));
+    } catch (error) {
+      showError(t('failed', language), t('unableToResendOtp', language));
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
+  const isValid = otp.length === 6;
+
+  // ── OTP character dots ────────────────────────────────────────────────────
+  const renderDots = () =>
+    [0, 1, 2, 3, 4, 5].map(i => {
+      const char = otp[i];
+      const isCurrent = otp.length === i && focused;
+
+      return (
+        <View
+          key={i}
+          style={[
+            styles.otpDot,
+            char ? styles.otpDotFilled : null,
+            isCurrent ? styles.otpDotActive : null,
+            error && !char ? styles.otpDotError : null,
+          ]}>
+          {char ? (
+            <Text style={styles.otpDotText}>{char}</Text>
+          ) : isCurrent ? (
+            <View style={styles.cursor} />
+          ) : null}
+        </View>
+      );
+    });
+
+  return (
+    <View style={styles.overlay}>
+      <View style={styles.sheet}>
+
+        {/* ── Handle ── */}
+        <View style={styles.handle} />
+
+        {/* ── Header ── */}
+        <View style={styles.headerRow}>
+          <View style={styles.otpIconWrap}>
+            <Ionicons
+              name="chatbubble-ellipses-outline"
+              size={22}
+              color="#2563EB"
+            />
+          </View>
+
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.title}>
+              {t('verifyOtp', language)}
+            </Text>
+            <Text style={styles.subtitle}>
+              {t('otpSentTo', language)}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── Phone number ── */}
+        <View style={styles.phoneRow}>
+          <View style={styles.phonePill}>
+            <Ionicons
+              name="call-outline"
+              size={14}
+              color="#2563EB"
+            />
+            <Text style={styles.phone}> {phone}</Text>
+          </View>
+
+        </View>
+
+        {/* ── OTP dots (visual) + hidden input ── */}
+        <Animated.View
+          style={{transform: [{translateX: shakeAnim}]}}>
+          <View style={styles.dotsRow}>{renderDots()}</View>
+
+          {/* Hidden real TextInput behind the dots */}
+          <TextInput
+            placeholder=""
+            keyboardType="number-pad"
+            maxLength={6}
+            value={otp}
+            onChangeText={text => {
+              setOtp(text);
+              if (error) setError('');
+            }}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            style={styles.hiddenInput}
+            caretHidden
+          />
+        </Animated.View>
+
+        {/* ── Error ── */}
+        {error ? (
+          <View style={styles.errorRow}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={14}
+              color="#EF4444"
+            />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
+        {/* ── Timer + resend ── */}
+        <View style={styles.timerBlock}>
+          {timer > 0 ? (
+            <>
+              <View style={styles.progressTrack}>
+                <Animated.View
+                  style={[
+                    styles.progressBar,
+                    {
+                      width: progressAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['0%', '100%'],
+                      }),
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={styles.timerText}>
+                {t('resendIn', language)}{' '}
+                <Text style={styles.timerCount}>{timer}s</Text>
+              </Text>
+            </>
+          ) : (
+            <TouchableOpacity
+              disabled={resendLoading}
+              style={styles.resendBtn}
+              activeOpacity={0.75}
+              onPress={handleResendOtp}>
+              <Ionicons
+                name="refresh-outline"
+                size={15}
+                color="#2563EB"
+              />
+              <Text style={styles.resendText}>
+                {resendLoading
+                  ? t('sendingOtp', language)
+                  : t('resendOtp', language)}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* ── Verify button ── */}
+        <TouchableOpacity
+          style={[
+            styles.button,
+            (!isValid || loading) && styles.disabledButton,
+          ]}
+          disabled={!isValid || loading}
+          activeOpacity={0.85}
+          onPress={handleVerifyOtp}>
+          {!loading && (
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={18}
+              color="#FFFFFF"
+              style={styles.buttonIcon}
+            />
+          )}
+          <Text style={styles.buttonText}>
+            {loading
+              ? t('verifying', language)
+              : t('verifyOtp', language)}
+          </Text>
+        </TouchableOpacity>
+
+      </View>
+    </View>
+  );
+};
+
+export default OtpScreen;
+
+const styles = StyleSheet.create({
+
+  overlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    height: '68%',
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: {width: 0, height: -5},
+    elevation: 10,
+  },
+
+  // ── Handle ────────────────────────────────
+  handle: {
+    width: 44,
+    height: 4,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+    alignSelf: 'center',
+    marginBottom: 26,
+  },
+
+  // ── Header ────────────────────────────────
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+
+  otpIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+
+  headerTextBlock: {
+    flex: 1,
+  },
+
+  title: {
+    fontSize: 24,
+    color: '#0F172A',
+    letterSpacing: -0.4,
+    fontFamily: Fonts.bold,
+  },
+
+  subtitle: {
+    marginTop: 3,
+    color: '#64748B',
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+  },
+
+  // ── Phone row ─────────────────────────────
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+
+  phonePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  phone: {
+    fontSize: 15,
+    color: '#2563EB',
+    fontFamily: Fonts.semiBold,
+    letterSpacing: 0.3,
+  },
+
+  changeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+
+  changeBtnText: {
+    color: '#64748B',
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
+  },
+
+  // ── OTP dots ──────────────────────────────
+  dotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+
+  otpDot: {
+    width: 46,
+    height: 54,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  otpDotFilled: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#2563EB',
+  },
+
+  otpDotActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: {width: 0, height: 2},
+    elevation: 3,
+  },
+
+  otpDotError: {
+    borderColor: '#FCA5A5',
+    backgroundColor: '#FFF5F5',
+  },
+
+  otpDotText: {
+    fontSize: 20,
+    color: '#0F172A',
+    fontFamily: Fonts.bold,
+    letterSpacing: 0,
+  },
+
+  cursor: {
+    width: 2,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: '#2563EB',
+  },
+
+  hiddenInput: {
+    position: 'absolute',
+    width: '100%',
+    height: 54,
+    opacity: 0,
+  },
+
+  // ── Error ─────────────────────────────────
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    justifyContent: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
+  errorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+  },
+
+  // ── Timer / resend ────────────────────────
+  timerBlock: {
+    alignItems: 'center',
+    marginTop: 18,
+    marginBottom: 4,
+    gap: 8,
+  },
+
+  progressTrack: {
+    width: '60%',
+    height: 3,
+    borderRadius: 4,
+    backgroundColor: '#F1F5F9',
+    overflow: 'hidden',
+  },
+
+  progressBar: {
+    height: 3,
+    borderRadius: 4,
+    backgroundColor: '#2563EB',
+  },
+
+  timerText: {
+    color: '#94A3B8',
+    fontFamily: Fonts.regular,
+    fontSize: 13,
+  },
+
+  timerCount: {
+    color: '#2563EB',
+    fontFamily: Fonts.semiBold,
+  },
+
+  resendBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+  },
+
+  resendText: {
+    color: '#2563EB',
+    fontFamily: Fonts.semiBold,
+    fontSize: 14,
+  },
+
+  // ── Button ────────────────────────────────
+  button: {
+    backgroundColor: '#2563EB',
+    height: 56,
+    borderRadius: 16,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    shadowColor: '#2563EB',
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    shadowOffset: {width: 0, height: 5},
+    elevation: 7,
+  },
+
+  disabledButton: {
+    opacity: 0.45,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+
+  buttonIcon: {
+    marginRight: 8,
+  },
+
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    letterSpacing: 0.2,
+    fontFamily: Fonts.semiBold,
+  },
+});
