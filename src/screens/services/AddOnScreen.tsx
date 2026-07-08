@@ -20,6 +20,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {getLocalizedText} from '../../utils/getLocalizedText';
 
 import {useAppDataStore} from '../../store/appDataStore';
@@ -78,6 +80,9 @@ const setOffersLoading = useAppDataStore(
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   useEffect(() => {
     if (cachedAddOns && cachedAddOns.length > 0) {
@@ -179,7 +184,7 @@ const handleContinue = () => {
                         : 'chevron-back'
                     }
                     size={22}
-                    color="#0F172A"
+                    color={colors.textPrimary}
                   />
                 </TouchableOpacity>
 
@@ -201,7 +206,7 @@ const handleContinue = () => {
                   <Ionicons
                     name="cube-outline"
                     size={12}
-                    color="#2563EB"
+                    color={colors.primary}
                   />
                   <Text style={styles.packageChipText}>
                     {t('selectedPackage', language)}
@@ -256,8 +261,6 @@ const handleContinue = () => {
               activeOpacity={0.8}
               onPress={() => toggleAddOn(item)}>
 
-              {selected && <View style={styles.selectedTopBar} />}
-
               <View style={styles.cardRow}>
                 <View style={styles.cardTextBlock}>
                   <Text style={[
@@ -308,7 +311,7 @@ const handleContinue = () => {
                 <Ionicons
                   name="receipt-outline"
                   size={15}
-                  color="#2563EB"
+                  color={colors.primary}
                 />
               </View>
               <Text style={styles.totalLabel}>
@@ -395,11 +398,11 @@ const handleContinue = () => {
 
 export default AddOnScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   listContent: {
@@ -423,7 +426,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -435,14 +438,14 @@ const styles = StyleSheet.create({
 
   heading: {
     fontSize: 26,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 3,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     fontFamily: Fonts.regular,
@@ -450,12 +453,12 @@ const styles = StyleSheet.create({
 
   // ── Summary card ─────────────────────────
   summaryCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 18,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.07,
     shadowRadius: 12,
@@ -482,7 +485,7 @@ const styles = StyleSheet.create({
   },
 
   packageChipText: {
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.semiBold,
     fontSize: 12,
   },
@@ -495,20 +498,20 @@ const styles = StyleSheet.create({
   },
 
   summaryPrice: {
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 14,
     fontFamily: Fonts.bold,
   },
 
   summaryName: {
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
     lineHeight: 22,
   },
 
   heroDescription: {
-    color: '#64748B',
+    color: colors.textSecondary,
     marginTop: 5,
     lineHeight: 20,
     fontFamily: Fonts.regular,
@@ -527,12 +530,12 @@ const styles = StyleSheet.create({
     width: 4,
     height: 18,
     borderRadius: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   sectionTitle: {
     fontSize: 17,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.2,
   },
@@ -547,17 +550,17 @@ const styles = StyleSheet.create({
   sectionCountText: {
     fontFamily: Fonts.bold,
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   // ── Add-on cards ──────────────────────────
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 18,
     padding: 16,
     marginBottom: 10,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     overflow: 'hidden',
     shadowColor: '#64748B',
     shadowOpacity: 0.05,
@@ -567,23 +570,9 @@ const styles = StyleSheet.create({
   },
 
   selectedCard: {
-    borderColor: '#2563EB',
-    backgroundColor: '#F8FBFF',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-
-  selectedTopBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#2563EB',
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedCardBackground,
   },
 
   cardRow: {
@@ -598,18 +587,18 @@ const styles = StyleSheet.create({
 
   name: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
     lineHeight: 20,
   },
 
   nameSelected: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   description: {
     marginTop: 5,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 20,
     fontFamily: Fonts.regular,
@@ -624,12 +613,12 @@ const styles = StyleSheet.create({
 
   price: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
   },
 
   priceSelected: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   checkBox: {
@@ -637,25 +626,25 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
   },
 
   checkBoxSelected: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
 
   // ── Total card ────────────────────────────
   totalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 22,
     padding: 18,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -681,27 +670,27 @@ const styles = StyleSheet.create({
 
   totalLabel: {
     flex: 1,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
     fontSize: 14,
   },
 
   totalCountBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 20,
   },
 
   totalCountText: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.medium,
     fontSize: 12,
   },
 
   totalDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     marginBottom: 14,
   },
 
@@ -719,19 +708,19 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     marginVertical: 12,
   },
 
   grandLabel: {
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
   },
 
   grandTotal: {
     fontSize: 20,
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.3,
   },
@@ -742,7 +731,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 14,
     paddingLeft: 18,
@@ -762,7 +751,7 @@ const styles = StyleSheet.create({
   },
 
   footerLabel: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 10,
     fontFamily: Fonts.medium,
     textTransform: 'uppercase',
@@ -772,13 +761,13 @@ const styles = StyleSheet.create({
   footerPrice: {
     marginTop: 3,
     fontSize: 20,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.3,
   },
 
   footerButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 50,
     paddingHorizontal: 22,
     borderRadius: 16,

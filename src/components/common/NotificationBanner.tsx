@@ -11,6 +11,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 
 import {useNotificationStore} from '../../store/notificationStore';
 import {useLanguageStore} from '../../store/languageStore';
+import {useTheme} from '../../hooks/useTheme';
 import {Fonts} from '../../constants/fonts';
 
 const TYPE_CONFIG: Record<
@@ -33,6 +34,9 @@ const NotificationBanner = () => {
 
   const language =
     useLanguageStore(state => state.language);
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const translateY =
     useRef(new Animated.Value(-180)).current;
@@ -157,7 +161,7 @@ const NotificationBanner = () => {
           <Ionicons
             name="close"
             size={16}
-            color="#64748B"
+            color={colors.textSecondary}
           />
         </View>
       </Pressable>
@@ -183,7 +187,7 @@ const NotificationBanner = () => {
 
 export default NotificationBanner;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   wrapper: {
     position: 'absolute',
     top: 55,
@@ -193,7 +197,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
@@ -229,7 +233,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Fonts.semiBold,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     lineHeight: 20,
   },
 
@@ -237,7 +241,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
 
@@ -245,7 +249,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -253,7 +257,7 @@ const styles = StyleSheet.create({
 
   progressTrack: {
     height: 3,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
     overflow: 'hidden',

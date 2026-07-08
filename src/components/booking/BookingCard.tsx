@@ -13,6 +13,8 @@ import {
   useLanguageStore,
 } from '../../store/languageStore';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {t} from '../../i18n';
 
 interface Props {
@@ -28,6 +30,9 @@ const BookingCard = ({
   useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
 const serviceName =
   typeof booking.service?.name ===
@@ -83,9 +88,9 @@ const serviceName =
 
 export default BookingCard;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
 
     borderRadius: 22,
 
@@ -120,7 +125,7 @@ const styles = StyleSheet.create({
 
     fontSize: 18,
 
-    color: '#0F172A',
+    color: colors.textPrimary,
 
     fontFamily: Fonts.bold,
 
@@ -130,7 +135,7 @@ const styles = StyleSheet.create({
   bookingId: {
     marginTop: 12,
 
-    color: '#64748B',
+    color: colors.textSecondary,
 
     fontFamily: Fonts.medium,
 

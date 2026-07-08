@@ -23,11 +23,16 @@ export const verifyOtp = async (
 };
 
 export const firebaseLogin = (
-  phone: string,
+  idToken: string,
+  phone?: string,
 ) => {
   return API.post(
     '/auth/firebase-login',
     {
+      idToken,
+      // Sent for logging/debugging only — the backend derives the
+      // authenticated phone number from the verified idToken, never from
+      // this field.
       phone,
     },
   );

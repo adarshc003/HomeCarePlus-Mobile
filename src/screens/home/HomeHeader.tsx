@@ -11,6 +11,7 @@ import {useAuthStore} from '../../store/authStore';
 import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 
 import Icon from '@react-native-vector-icons/ionicons';
 
@@ -28,6 +29,9 @@ const HomeHeader = ({navigation}: any) => {
   const unreadCount = useNotificationStore(
     state => state.unreadCount,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   return (
     <View style={styles.container}>
@@ -61,7 +65,7 @@ const HomeHeader = ({navigation}: any) => {
           <Icon
             name="person-outline"
             size={14}
-            color="#2563EB"
+            color={colors.primary}
             style={styles.loginIcon}
           />
           <Text style={styles.loginText}>
@@ -81,7 +85,7 @@ const HomeHeader = ({navigation}: any) => {
                 : 'notifications-outline'
             }
             size={22}
-            color="#2563EB"
+            color={colors.primary}
           />
 
           {unreadCount > 0 && (
@@ -101,7 +105,7 @@ const HomeHeader = ({navigation}: any) => {
 
 export default HomeHeader;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     marginTop: 52,
@@ -148,13 +152,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 19,
     fontFamily: Fonts.bold,
-    color: '#0A0F1E',
+    color: colors.textPrimary,
     letterSpacing: -0.4,
   },
 
   subtitle: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textHint,
     marginTop: 2,
     fontFamily: Fonts.regular,
     letterSpacing: 0.1,
@@ -165,12 +169,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: `${colors.primary}1A`,
     paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: `${colors.primary}33`,
   },
 
   loginIcon: {
@@ -178,7 +182,7 @@ const styles = StyleSheet.create({
   },
 
   loginText: {
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.semiBold,
     fontSize: 13,
     letterSpacing: 0.1,
@@ -189,11 +193,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: `${colors.primary}1A`,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: `${colors.primary}33`,
   },
 
   badge: {
@@ -208,7 +212,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 3,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.card,
   },
 
   badgeText: {

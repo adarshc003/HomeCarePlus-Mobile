@@ -25,3 +25,29 @@ export const verifyTamaraPayment = async (
 
   return response.data;
 };
+
+export const createTelrCheckout = async (
+  bookingId: string,
+) => {
+  const response = await API.post(
+    '/payment/telr/create-checkout',
+    {
+      bookingId,
+    },
+  );
+
+  return response.data;
+};
+
+export const verifyTelrPayment = async (
+  bookingId: string,
+) => {
+  const response = await API.post(
+    '/payment/telr/verify',
+    {
+      bookingId,
+    },
+  );
+
+  return response.data;
+};

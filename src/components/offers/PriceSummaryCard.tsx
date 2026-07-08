@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 import {useLanguageStore} from '../../store/languageStore';
 
 import {t} from '../../i18n';
@@ -37,6 +38,9 @@ const PriceSummaryCard = ({
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   return (
     <View style={styles.container}>
@@ -116,10 +120,10 @@ const PriceSummaryCard = ({
 
 export default PriceSummaryCard;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 20,
     marginTop: 18,
@@ -132,7 +136,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 18,
-    color: '#111827',
+    color: colors.textPrimary,
     marginBottom: 18,
     fontFamily: Fonts.bold,
   },
@@ -144,13 +148,13 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 14,
     fontFamily: Fonts.medium,
   },
 
   value: {
-    color: '#111827',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: Fonts.semiBold,
   },
@@ -168,7 +172,7 @@ const styles = StyleSheet.create({
   },
 
   remove: {
-    color: '#2563EB',
+    color: colors.primary,
     marginBottom: 14,
     fontSize: 13,
     fontFamily: Fonts.semiBold,
@@ -176,7 +180,7 @@ const styles = StyleSheet.create({
 
   divider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     marginVertical: 14,
   },
 
@@ -188,13 +192,13 @@ const styles = StyleSheet.create({
 
   totalLabel: {
     fontSize: 20,
-    color: '#111827',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
   },
 
   total: {
     fontSize: 28,
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.bold,
   },
 

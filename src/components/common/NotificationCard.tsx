@@ -20,6 +20,8 @@ import {
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {t} from '../../i18n';
 
 import {useNavigation} from '@react-navigation/native';
@@ -35,6 +37,10 @@ import {
 import {
   markNotificationRead,
 } from '../../services/notificationApi';
+
+import {
+  getBookingNumberById,
+} from '../../services/bookingService';
 
 import {
   useNotificationStore,
@@ -102,6 +108,9 @@ const NotificationCard = ({
     useNotificationStore(
       state => state.markRead,
     );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const title =
     language === 'ar'
@@ -217,15 +226,24 @@ const NotificationCard = ({
                 case 'booking':
                 case 'payment':
                 case 'review':
+                case 'cancelled':
                   if (item.data?.bookingId) {
-                    navigation.navigate(
-                      'BookingDetails',
-                      {
-                        bookingNumber: String(
-                          item.data.bookingId,
-                        ),
-                      },
-                    );
+                    const rawId = String(item.data.bookingId);
+
+                    // ERP's cancellation/status-change webhooks send the
+                    // booking's internal numeric id here, not its
+                    // bookingNumber (e.g. "HCP-000102") — resolve it first.
+                    const bookingNumber = /^\d+$/.test(rawId)
+                      ? (await getBookingNumberById(rawId))
+                          .bookingNumber
+                      : rawId;
+
+                    if (bookingNumber) {
+                      navigation.navigate(
+                        'BookingDetails',
+                        {bookingNumber},
+                      );
+                    }
                   }
                   break;
 
@@ -291,9 +309,9 @@ const NotificationCard = ({
 
 export default NotificationCard;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     marginHorizontal: 16,
     marginTop: 10,
     borderRadius: 20,
@@ -315,9 +333,15 @@ const styles = StyleSheet.create({
   },
 
   cardUnread: {
-    backgroundColor: '#FAFBFF',
+    backgroundColor: colors.selectedCardBackground,
+    borderWidth: 1,
+    borderColor: `${colors.primary}26`,
     shadowOpacity: 0.1,
-    elevation: 4,
+    // Same value as `card`'s elevation — changing elevation together with
+    // backgroundColor on the same Android View mid-list is what caused the
+    // "black box" rendering artifact (same root cause diagnosed earlier
+    // for the selected-card elevation bug elsewhere in this app).
+    elevation: 3,
   },
 
   unreadBar: {
@@ -347,7 +371,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Fonts.semiBold,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     lineHeight: 20,
   },
 
@@ -355,7 +379,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
 

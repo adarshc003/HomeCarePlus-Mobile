@@ -15,6 +15,7 @@ import {useCategoryStore} from '../../store/categoryStore';
 import {useServiceStore} from '../../store/serviceStore';
 import {useLanguageStore} from '../../store/languageStore';
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 
 interface AnimatedChipProps {
   item: any;
@@ -30,6 +31,9 @@ const AnimatedChip = ({
   onPress,
 }: AnimatedChipProps) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const handlePress = () => {
     Animated.sequence([
@@ -75,7 +79,7 @@ const AnimatedChip = ({
           <Icon
             name={iconName}
             size={16}
-            color={isSelected ? '#FFFFFF' : '#2563EB'}
+            color={isSelected ? '#FFFFFF' : colors.primary}
           />
         </View>
 
@@ -116,6 +120,9 @@ const CategorySection = ({
   const categories = useCategoryStore(
     state => state.categories,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const allCategories = [
     {
@@ -160,7 +167,7 @@ const CategorySection = ({
 
 export default CategorySection;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   section: {
     marginTop: 24,
@@ -184,13 +191,13 @@ const styles = StyleSheet.create({
   },
 
   chipDefault: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   chipSelected: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     borderWidth: 0,
   },
 
@@ -218,7 +225,7 @@ const styles = StyleSheet.create({
   },
 
   labelDefault: {
-    color: '#475569',
+    color: colors.textSecondary,
     fontFamily: Fonts.medium,
   },
 

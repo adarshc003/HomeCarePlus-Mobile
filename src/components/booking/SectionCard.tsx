@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 
 interface Props {
   title: string;
@@ -16,6 +17,9 @@ const SectionCard = ({
   title,
   children,
 }: Props) => {
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.card}>
       <Text style={styles.title}>
@@ -29,11 +33,11 @@ const SectionCard = ({
 
 export default SectionCard;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   card: {
 
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
 
     borderRadius: 22,
 
@@ -61,7 +65,7 @@ const styles = StyleSheet.create({
 
   title: {
 
-    color: '#94A3B8',
+    color: colors.textHint,
 
     fontSize: 13,
 

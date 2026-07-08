@@ -60,6 +60,8 @@ interface NotificationState {
 
   markRead: (id: string) => void;
 
+  markAllRead: () => void;
+
   removeNotification: (id: string) => void;
 
   setLoading: (
@@ -142,6 +144,19 @@ markRead: id =>
         : state.unreadCount,
     };
   }),
+
+// One atomic state transition instead of the caller looping and calling
+// markRead() per item — N sequential set() calls each produce their own
+// FlatList re-render, and on Android that rapid render churn on elevated
+// cards left some rows visually stuck mid-transition until the screen was
+// remounted. A single array replacement + single re-render doesn't hit that.
+markAllRead: () =>
+  set(state => ({
+    notifications: state.notifications.map(item =>
+      item.isRead ? item : {...item, isRead: true},
+    ),
+    unreadCount: 0,
+  })),
 
 removeNotification: id =>
   set(state => {

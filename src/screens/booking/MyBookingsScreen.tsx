@@ -29,6 +29,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import BookingCard from '../../components/booking/BookingCard';
 
 import {RootStackParamList} from '../../navigation/types';
@@ -45,9 +47,14 @@ const MyBookingsScreen = () => {
 
   const [refreshing, setRefreshing] = useState(false);
 
+  const [loadError, setLoadError] = useState(false);
+
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const navigation =
     useNavigation<
@@ -58,8 +65,12 @@ const MyBookingsScreen = () => {
     try {
       const data = await getBookings();
       setBookings(data.bookings || []);
+      setLoadError(false);
     } catch (error) {
       console.log(error);
+      // A failed fetch must never look like "no bookings yet" — that's
+      // indistinguishable from a real empty history and hides real outages.
+      setLoadError(true);
     } finally {
       setLoading(false);
     }
@@ -113,18 +124,22 @@ const MyBookingsScreen = () => {
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconWrap}>
         <Ionicons
-          name="document-text-outline"
+          name={loadError ? 'cloud-offline-outline' : 'document-text-outline'}
           size={48}
           color="#4757E7"
         />
       </View>
 
       <Text style={styles.emptyTitle}>
-        {t('noBookingsYet', language)}
+        {loadError
+          ? t('couldNotLoadBookings', language)
+          : t('noBookingsYet', language)}
       </Text>
 
       <Text style={styles.emptyText}>
-        {t('noBookingsDesc', language)}
+        {loadError
+          ? t('couldNotLoadBookingsDesc', language)
+          : t('noBookingsDesc', language)}
       </Text>
     </View>
   );
@@ -201,25 +216,25 @@ const MyBookingsScreen = () => {
 
 export default MyBookingsScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     paddingTop: 50,
   },
 
   // ── Loader ────────────────────────────────────────────────────────────────
   loaderContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
   },
 
   loaderCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     paddingVertical: 40,
     paddingHorizontal: 48,
@@ -235,7 +250,7 @@ const styles = StyleSheet.create({
   loaderText: {
     fontFamily: Fonts.medium,
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   // ── Header ────────────────────────────────────────────────────────────────
@@ -268,7 +283,7 @@ const styles = StyleSheet.create({
 
   heading: {
     fontSize: 28,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
@@ -277,7 +292,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 13,
     lineHeight: 20,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.regular,
   },
 
@@ -304,7 +319,7 @@ const styles = StyleSheet.create({
   countLabel: {
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   // ── List ──────────────────────────────────────────────────────────────────
@@ -323,11 +338,11 @@ const styles = StyleSheet.create({
   // ── Empty state ───────────────────────────────────────────────────────────
   emptyContainer: {
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 36,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.06,
     shadowRadius: 14,
@@ -347,7 +362,7 @@ const styles = StyleSheet.create({
 
   emptyTitle: {
     fontSize: 20,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     marginBottom: 10,
     textAlign: 'center',
@@ -355,7 +370,7 @@ const styles = StyleSheet.create({
   },
 
   emptyText: {
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     fontFamily: Fonts.regular,

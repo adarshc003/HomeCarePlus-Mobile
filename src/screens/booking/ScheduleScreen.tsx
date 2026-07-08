@@ -18,6 +18,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {getLocalizedText} from '../../utils/getLocalizedText';
 
 import Ionicons from '@react-native-vector-icons/ionicons';
@@ -96,6 +98,9 @@ const [selectedSlot, setSlot] =
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const saveDate = useBookingStore(
     state => state.setSelectedDate,
@@ -224,7 +229,7 @@ const displayDate =
                       : 'chevron-back'
                   }
                   size={22}
-                  color="#0F172A"
+                  color={colors.textPrimary}
                 />
               </TouchableOpacity>
 
@@ -247,7 +252,7 @@ const displayDate =
                   <Ionicons
                     name="cube-outline"
                     size={12}
-                    color="#2563EB"
+                    color={colors.primary}
                   />
                   <Text style={styles.packageBadgeText}>
               {t('selectedPackage', language)}
@@ -370,8 +375,8 @@ onPress={() => {
                       disabled
                         ? '#CBD5E1'
                         : active
-                        ? '#2563EB'
-                        : '#64748B'
+                        ? colors.primary
+                        : colors.textSecondary
                     }
                   />
                 </View>
@@ -475,7 +480,7 @@ onPress={() => {
 
 export default ScheduleScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   root: {
     flex: 1,
@@ -483,7 +488,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   scrollContent: {
@@ -510,7 +515,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -522,14 +527,14 @@ const styles = StyleSheet.create({
 
   heading: {
     fontSize: 26,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 3,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     fontFamily: Fonts.regular,
     lineHeight: 18,
@@ -537,12 +542,12 @@ const styles = StyleSheet.create({
 
   // ── Package Card ─────────────────────────
   packageCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 26,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -568,7 +573,7 @@ const styles = StyleSheet.create({
   },
 
   packageBadgeText: {
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 12,
     fontFamily: Fonts.semiBold,
   },
@@ -581,14 +586,14 @@ const styles = StyleSheet.create({
   },
 
   packagePrice: {
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 15,
     fontFamily: Fonts.bold,
   },
 
   packageLabel: {
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
     lineHeight: 22,
   },
@@ -596,7 +601,7 @@ const styles = StyleSheet.create({
   // ── Section Labels ───────────────────────
   sectionLabel: {
     fontSize: 17,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     marginBottom: 14,
     letterSpacing: -0.2,
@@ -618,10 +623,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.04,
     shadowRadius: 6,
@@ -630,8 +635,8 @@ const styles = StyleSheet.create({
   },
 
   dateCardActive: {
-    backgroundColor: '#2563EB',
-    borderColor: '#2563EB',
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
     shadowColor: '#2563EB',
     shadowOpacity: 0.25,
     shadowRadius: 10,
@@ -640,7 +645,7 @@ const styles = StyleSheet.create({
 
   dateDayName: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textHint,
     fontFamily: Fonts.medium,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -652,7 +657,7 @@ const styles = StyleSheet.create({
 
   dateNum: {
     fontSize: 22,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     marginTop: 4,
     lineHeight: 26,
@@ -664,7 +669,7 @@ const styles = StyleSheet.create({
 
   dateLabel: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: colors.textHint,
     fontFamily: Fonts.medium,
     marginTop: 3,
   },
@@ -683,13 +688,13 @@ const styles = StyleSheet.create({
 
   // ── Slot Cards ───────────────────────────
   slotCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 16,
     marginBottom: 10,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -701,12 +706,9 @@ const styles = StyleSheet.create({
   },
 
   slotCardActive: {
-    backgroundColor: '#FAFBFF',
-    borderColor: '#2563EB',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+    borderWidth: 2,
+    backgroundColor: colors.selectedCardBackground,
+    borderColor: colors.primary,
   },
 
   slotCardDisabled: {
@@ -717,7 +719,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 11,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -728,30 +730,30 @@ const styles = StyleSheet.create({
   },
 
   slotIconWrapDisabled: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   slotText: {
     flex: 1,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: Fonts.medium,
   },
 
   slotTextActive: {
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.semiBold,
   },
 
   slotTextDisabled: {
-    color: '#94A3B8',
+    color: colors.textHint,
   },
 
   slotCheckWrap: {
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -761,8 +763,8 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderWidth: 1.5,
+    borderColor: colors.border,
     flexShrink: 0,
   },
 
@@ -799,7 +801,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 14,
     paddingLeft: 18,
@@ -819,7 +821,7 @@ const styles = StyleSheet.create({
   },
 
   footerLabel: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 1,
@@ -828,20 +830,20 @@ const styles = StyleSheet.create({
 
   footerDate: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
     marginTop: 3,
   },
 
   footerTime: {
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.regular,
     marginTop: 2,
   },
 
   footerButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 50,
     paddingHorizontal: 22,
     borderRadius: 16,

@@ -28,6 +28,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 const OtpScreen = ({
@@ -48,6 +50,9 @@ const OtpScreen = ({
   const [focused, setFocused] = useState(false);
 
   const language = useLanguageStore(state => state.language);
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(1)).current;
@@ -114,7 +119,12 @@ const OtpScreen = ({
 
       const phoneWithoutCode = firebasePhone?.replace('+91', '');
 
-      const response = await firebaseLogin(phoneWithoutCode);
+      // The backend now verifies this token itself and derives the phone
+      // number from it — the phone above is sent only for logging and is
+      // never trusted for authentication.
+      const idToken = await result.user.getIdToken();
+
+      const response = await firebaseLogin(idToken, phoneWithoutCode);
 
       await login(
         response.data.token,
@@ -203,7 +213,7 @@ const OtpScreen = ({
             <Ionicons
               name="chatbubble-ellipses-outline"
               size={22}
-              color="#2563EB"
+              color={colors.primary}
             />
           </View>
 
@@ -223,7 +233,7 @@ const OtpScreen = ({
             <Ionicons
               name="call-outline"
               size={14}
-              color="#2563EB"
+              color={colors.primary}
             />
             <Text style={styles.phone}> {phone}</Text>
           </View>
@@ -295,7 +305,7 @@ const OtpScreen = ({
               <Ionicons
                 name="refresh-outline"
                 size={15}
-                color="#2563EB"
+                color={colors.primary}
               />
               <Text style={styles.resendText}>
                 {resendLoading
@@ -337,7 +347,7 @@ const OtpScreen = ({
 
 export default OtpScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   overlay: {
     flex: 1,
@@ -346,7 +356,7 @@ const styles = StyleSheet.create({
   },
 
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     height: '68%',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
@@ -363,7 +373,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 10,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: 26,
   },
@@ -380,12 +390,12 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 14,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: `${colors.primary}1A`,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: `${colors.primary}33`,
   },
 
   headerTextBlock: {
@@ -394,14 +404,14 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 24,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.4,
     fontFamily: Fonts.bold,
   },
 
   subtitle: {
     marginTop: 3,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     fontFamily: Fonts.regular,
   },
@@ -418,9 +428,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: `${colors.primary}1A`,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: `${colors.primary}33`,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
@@ -428,7 +438,7 @@ const styles = StyleSheet.create({
 
   phone: {
     fontSize: 15,
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.semiBold,
     letterSpacing: 0.3,
   },
@@ -437,13 +447,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   changeBtnText: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.semiBold,
     fontSize: 12,
   },
@@ -462,19 +472,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   otpDotFilled: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor: `${colors.primary}1A`,
+    borderColor: colors.primary,
   },
 
   otpDotActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
     shadowColor: '#2563EB',
     shadowOpacity: 0.12,
     shadowRadius: 6,
@@ -484,12 +494,12 @@ const styles = StyleSheet.create({
 
   otpDotError: {
     borderColor: '#FCA5A5',
-    backgroundColor: '#FFF5F5',
+    backgroundColor: 'rgba(239,68,68,0.08)',
   },
 
   otpDotText: {
     fontSize: 20,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: 0,
   },
@@ -498,7 +508,7 @@ const styles = StyleSheet.create({
     width: 2,
     height: 22,
     borderRadius: 2,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   hiddenInput: {
@@ -536,24 +546,24 @@ const styles = StyleSheet.create({
     width: '60%',
     height: 3,
     borderRadius: 4,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     overflow: 'hidden',
   },
 
   progressBar: {
     height: 3,
     borderRadius: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   timerText: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontFamily: Fonts.regular,
     fontSize: 13,
   },
 
   timerCount: {
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.semiBold,
   },
 
@@ -561,23 +571,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: `${colors.primary}1A`,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: `${colors.primary}33`,
     paddingHorizontal: 16,
     paddingVertical: 9,
     borderRadius: 20,
   },
 
   resendText: {
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.semiBold,
     fontSize: 14,
   },
 
   // ── Button ────────────────────────────────
   button: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 56,
     borderRadius: 16,
     flexDirection: 'row',

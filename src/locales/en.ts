@@ -255,6 +255,8 @@ export default {
   manageBookingsSubtitle: 'Track upcoming, active and completed service requests',
   noBookingsYet: 'No Bookings Yet',
   noBookingsDesc: 'Your booked services will appear here.',
+  couldNotLoadBookings: 'Could Not Load Bookings',
+  couldNotLoadBookingsDesc: 'Something went wrong. Pull down to try again.',
   loadingBookings: 'Loading bookings…',
   bookingsCount: 'bookings',
   bookingNumber: 'Booking',
@@ -265,6 +267,7 @@ export default {
   partner: 'Partner',
   name: 'Name',
   phone: 'Phone',
+  contact: 'Contact',
   specialization: 'Specialization',
   method: 'Method',
   amount: 'Amount',
@@ -292,9 +295,11 @@ export default {
   continuePayment: 'Continue Payment',
   yearsExperience: 'Years Experience',
   callTechnician: 'Call Technician',
+  cancellationNoTechnician: 'No technician was available for your selected time slot, so this booking was automatically cancelled. Please book another time slot.',
 
   // ── Status badges ─────────────────────────────────────────────────────────
 statusPending: 'Booking Confirmed',
+statusPendingAssignment: 'Finding Technician',
 statusAssigned: 'Partner Assigned',
 statusTravelling: 'Technician On The Way',
 statusStarted: 'Service In Progress',

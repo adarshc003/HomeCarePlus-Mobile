@@ -28,6 +28,7 @@ const getColor = () => {
   switch (status) {
 
     case 'pending':
+    case 'pending_assignment':
       return '#F59E0B';
 
     case 'assigned':
@@ -61,6 +62,12 @@ const getLabel = () => {
     case 'pending':
       return t(
         'statusPending',
+        language,
+      );
+
+    case 'pending_assignment':
+      return t(
+        'statusPendingAssignment',
         language,
       );
 
@@ -109,6 +116,9 @@ const getIcon = () => {
 
     case 'pending':
       return 'checkmark-circle';
+
+    case 'pending_assignment':
+      return 'search-circle';
 
     case 'assigned':
       return 'person-circle';

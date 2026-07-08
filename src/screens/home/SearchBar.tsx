@@ -11,6 +11,7 @@ import { useServiceStore } from '../../store/serviceStore';
 import { useLanguageStore } from '../../store/languageStore';
 import { t } from '../../i18n';
 import { Fonts } from '../../constants/fonts';
+import { useTheme } from '../../hooks/useTheme';
 
 const SearchBar = ({
   onSearch,
@@ -23,13 +24,16 @@ const SearchBar = ({
   );
   const language = useLanguageStore(state => state.language);
 
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.wrapper}>
       <View style={styles.container}>
         <Ionicons
           name="search"
           size={22}
-          color="#64748B"
+          color={colors.textSecondary}
           style={styles.searchIcon}
         />
 
@@ -37,7 +41,7 @@ const SearchBar = ({
           autoFocus={autoFocus}
           value={searchText}
           placeholder={t('searchServices', language)}
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={colors.textHint}
           style={styles.input}
           returnKeyType="search"
           textAlign={I18nManager.isRTL ? 'right' : 'left'}
@@ -59,7 +63,7 @@ const SearchBar = ({
             <Ionicons
               name="close-circle"
               size={20}
-              color="#94A3B8"
+              color={colors.textHint}
             />
           </TouchableOpacity>
         )}
@@ -70,7 +74,7 @@ const SearchBar = ({
 
 export default SearchBar;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   wrapper: {
     marginTop: 24,
     marginBottom: 8,
@@ -78,12 +82,12 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     minHeight: 62,
     borderRadius: 22,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#000',
     shadowOpacity: 0.05,
     shadowRadius: 14,
@@ -99,7 +103,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.medium,
     paddingVertical: 0,
   },

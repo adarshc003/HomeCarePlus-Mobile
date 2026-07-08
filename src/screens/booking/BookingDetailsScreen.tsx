@@ -29,6 +29,8 @@ import {RootStackParamList} from '../../navigation/types';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {useLanguageStore} from '../../store/languageStore';
 
 import {t} from '../../i18n';
@@ -41,11 +43,13 @@ import DetailRow from '../../components/booking/DetailRow';
 
 import BookingTimeline from '../../components/booking/BookingTimeline';
 
-import {getBookingById} from '../../services/bookingService';
+import {getBookingById, getInvoice} from '../../services/bookingService';
 
 import {
   createTamaraCheckout,
   verifyTamaraPayment,
+  createTelrCheckout,
+  verifyTelrPayment,
 } from '../../services/paymentService';
 
 import {InAppBrowser} from 'react-native-inappbrowser-reborn';
@@ -71,6 +75,9 @@ const BookingDetailsScreen = ({
     state => state.language,
   );
 
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
+
   const updateBooking = useBookingStore(
     state => state.updateBooking,
   );
@@ -83,6 +90,40 @@ const BookingDetailsScreen = ({
   const [retryLoading, setRetryLoading] = useState(false);
 
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
+
+  const [showInvoice, setShowInvoice] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoice, setInvoice] = useState<any>(null);
+  const [invoiceError, setInvoiceError] = useState('');
+
+  const onToggleInvoice = async () => {
+    if (showInvoice) {
+      setShowInvoice(false);
+      return;
+    }
+
+    setShowInvoice(true);
+
+    if (invoice || invoiceLoading) {
+      return;
+    }
+
+    try {
+      setInvoiceLoading(true);
+      setInvoiceError('');
+
+      const response = await getInvoice(booking.id);
+
+      setInvoice(response.invoice);
+    } catch (error: any) {
+      setInvoiceError(
+        error?.response?.data?.message ||
+          'Invoice not available yet.',
+      );
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -131,12 +172,18 @@ const BookingDetailsScreen = ({
 
   const retryPayment = async () => {
 
+    // Same retry flow works for either gateway — only which checkout/verify
+    // call is made differs. ERP stores Telr as 'teller' (hcp_booking.py).
+    const isTelr = booking.paymentProvider === 'teller';
+    const createCheckout = isTelr ? createTelrCheckout : createTamaraCheckout;
+    const verifyPayment = isTelr ? verifyTelrPayment : verifyTamaraPayment;
+
     try {
 
       setRetryLoading(true);
 
       const response =
-        await createTamaraCheckout(
+        await createCheckout(
           booking.id,
         );
 
@@ -168,7 +215,7 @@ const BookingDetailsScreen = ({
       }
 
       const verify =
-        await verifyTamaraPayment(
+        await verifyPayment(
           booking.id,
         );
 
@@ -298,6 +345,8 @@ const BookingDetailsScreen = ({
       ? t('cashOnDelivery', language)
       : booking.paymentProvider === 'tamara'
       ? 'Tamara'
+      : booking.paymentProvider === 'teller'
+      ? 'Telr'
       : t('onlinePayment', language);
 
   const paymentStatusText =
@@ -341,11 +390,31 @@ const hasCoordinates =
     Linking.openURL(url);
   };
 
-  const serviceName = getLocalizedText(booking.service?.name, language);
-  const packageName = getLocalizedText(booking.package?.name, language);
-  const addOnNames = (booking.addOns || [])
-    .map((item: any) => getLocalizedText(item?.name, language))
-    .filter(Boolean);
+  // A historical booking must always show what was true at booking time,
+  // not the service/package/add-on's current live name — prefer ERP's
+  // immutable priceSnapshot and only fall back to the live relation when
+  // no snapshot is present (e.g. very old bookings).
+  const snapshot = booking.priceSnapshot;
+
+  const serviceName =
+    getLocalizedText(snapshot?.serviceName, language) ||
+    getLocalizedText(booking.service?.name, language);
+
+  const packageName =
+    getLocalizedText(snapshot?.packageName, language) ||
+    getLocalizedText(booking.package?.name, language);
+
+  const addOnNames = snapshot?.addOns?.length
+    ? snapshot.addOns
+        .map((item: any) =>
+          language === 'ar'
+            ? item.nameAr || item.nameEn
+            : item.nameEn || item.nameAr,
+        )
+        .filter(Boolean)
+    : (booking.addOns || [])
+        .map((item: any) => getLocalizedText(item?.name, language))
+        .filter(Boolean);
 
   const showOriginalAmount =
     booking.originalAmount > 0 &&
@@ -355,8 +424,10 @@ const hasCoordinates =
   const technician = booking.technician;
   const technicianHasRating =
     !!technician?.rating && technician.rating > 0;
-  const technicianHasExperience =
-    !!technician?.experience && technician.experience > 0;
+  // ERP's `experience` is a free-form description (e.g. "5 years in
+  // cleaning services"), not a number — a numeric comparison here always
+  // evaluated to false, hiding the badge even when experience was set.
+  const technicianHasExperience = !!technician?.experience;
   const technicianHasLanguages =
     !!technician?.languages &&
     Array.isArray(technician.languages) &&
@@ -393,7 +464,7 @@ const hasCoordinates =
                     : 'chevron-back'
                 }
                 size={22}
-                color="#0F172A"
+                color={colors.textPrimary}
               />
             </TouchableOpacity>
 
@@ -407,7 +478,7 @@ const hasCoordinates =
                   <Ionicons
                     name="receipt-outline"
                     size={13}
-                    color="#94A3B8"
+                    color={colors.textHint}
                   />
                   <Text style={styles.bookingNo}>
                     #{booking.bookingNumber}
@@ -483,6 +554,18 @@ const hasCoordinates =
           </View>
 
         </View>
+
+        {/* ── Cancellation notice ── */}
+        {booking.status === 'cancelled' && booking.cancellationReason && (
+          <View style={[styles.failureReasonBox, {marginBottom: 16}]}>
+            <Ionicons name="alert-circle-outline" size={14} color="#DC2626" />
+            <Text style={styles.failureReasonText}>
+              {booking.cancellationReason === 'NO_TECHNICIAN_AVAILABLE'
+                ? t('cancellationNoTechnician', language)
+                : booking.cancellationReason}
+            </Text>
+          </View>
+        )}
 
         {/* ── Booking progress / timeline ── */}
         <SectionCard title={t('bookingProgress', language)}>
@@ -643,6 +726,19 @@ const hasCoordinates =
             </Text>
           </View>
 
+          {/* Contact snapshot at booking time — may differ from the
+              customer's current profile name/phone; this is intentional. */}
+          {(booking.bookingContactName || booking.bookingContactPhone) && (
+            <DetailRow
+              label={t('contact', language)}
+              value={
+                [booking.bookingContactName, booking.bookingContactPhone]
+                  .filter(Boolean)
+                  .join(' • ')
+              }
+            />
+          )}
+
           {hasCoordinates && (
             <TouchableOpacity
               style={styles.mapsButton}
@@ -695,7 +791,7 @@ const hasCoordinates =
 
                   {technician.specialization ? (
                     <View style={styles.technicianMetaRow}>
-                      <Ionicons name="construct-outline" size={12} color="#64748B" />
+                      <Ionicons name="construct-outline" size={12} color={colors.textSecondary} />
                       <Text style={styles.technicianMetaText} numberOfLines={1}>
                         {technician.specialization}
                       </Text>
@@ -707,7 +803,7 @@ const hasCoordinates =
                       <View style={styles.technicianBadge}>
                         <Ionicons name="time-outline" size={11} color="#4757E7" />
                         <Text style={styles.technicianBadgeText} numberOfLines={1}>
-                          {technician.experience} {t('yearsExperience', language)}
+                          {technician.experience}
                         </Text>
                       </View>
                     )}
@@ -750,7 +846,7 @@ const hasCoordinates =
           ) : (
             <View style={styles.technicianPlaceholder}>
               <View style={styles.technicianPlaceholderIconWrap}>
-                <Ionicons name="person-outline" size={20} color="#94A3B8" />
+                <Ionicons name="person-outline" size={20} color={colors.textHint} />
               </View>
               <Text style={styles.technicianPlaceholderText}>
                 {t('technicianWillBeAssigned', language)}
@@ -830,9 +926,13 @@ const hasCoordinates =
 
         {/* ── Retry / Continue Payment ── */}
         {booking.paymentMethod === 'ONLINE' &&
-          booking.paymentProvider === 'tamara' &&
+          ['tamara', 'teller'].includes(booking.paymentProvider) &&
           booking.paymentStatus !== 'paid' &&
-          booking.status === 'pending' && (
+          // A booking moves 'pending' → 'pending_assignment' automatically
+          // and near-instantly after creation (ERP's action_broadcast) —
+          // by the time the customer sees this screen it's almost always
+          // already 'pending_assignment', not 'pending'.
+          ['pending', 'pending_assignment'].includes(booking.status) && (
 
             <SectionCard title={t('payment', language)}>
 
@@ -906,7 +1006,7 @@ const hasCoordinates =
               <Ionicons
                 name="information-circle-outline"
                 size={16}
-                color="#64748B"
+                color={colors.textSecondary}
               />
               <Text style={styles.info}>
                 {t('verificationInfo', language)}.
@@ -928,6 +1028,75 @@ const hasCoordinates =
             </TouchableOpacity>
           </SectionCard>
         )}
+
+        {/* ── Invoice (after completion + review) ── */}
+        {booking.status === 'completed' && booking.reviewSubmitted && (
+          <SectionCard title={t('invoice', language) || 'Invoice'}>
+            <TouchableOpacity
+              style={styles.qrButton}
+              activeOpacity={0.85}
+              onPress={onToggleInvoice}>
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color="#FFFFFF"
+              />
+              <Text style={styles.qrButtonText}>
+                {showInvoice
+                  ? t('hideInvoice', language) || 'Hide Invoice'
+                  : t('viewInvoice', language) || 'View Invoice'}
+              </Text>
+            </TouchableOpacity>
+
+            {showInvoice && (
+              <View style={styles.invoiceBox}>
+                {invoiceLoading ? (
+                  <ActivityIndicator color="#4757E7" />
+                ) : invoiceError ? (
+                  <Text style={styles.info}>{invoiceError}</Text>
+                ) : invoice ? (
+                  <>
+                    {invoice.invoiceNumber && (
+                      <DetailRow
+                        label={t('invoiceNumber', language) || 'Invoice No.'}
+                        value={String(invoice.invoiceNumber)}
+                      />
+                    )}
+                    {invoice.invoiceDate && (
+                      <DetailRow
+                        label={t('bookingDate', language)}
+                        value={String(invoice.invoiceDate)}
+                      />
+                    )}
+                    {invoice.amount != null && (
+                      <DetailRow
+                        label={t('finalAmount', language)}
+                        value={`${t('currency', language)} ${invoice.amount}`}
+                      />
+                    )}
+                  </>
+                ) : null}
+              </View>
+            )}
+          </SectionCard>
+        )}
+
+        {/* ── Back to home ── */}
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={styles.homeBtn}
+          onPress={() => navigation.navigate('Home')}>
+          <Ionicons
+            name={
+              language === 'ar' ? 'arrow-forward' : 'arrow-back'
+            }
+            size={16}
+            color={colors.primary}
+          />
+          <Text style={styles.homeBtnText}>
+            {t('backToHome', language)}
+          </Text>
+        </TouchableOpacity>
 
       </ScrollView>
 
@@ -957,7 +1126,7 @@ const hasCoordinates =
               style={styles.technicianModalCloseBtn}
               activeOpacity={0.7}
               onPress={() => setShowTechnicianModal(false)}>
-              <Ionicons name="close" size={20} color="#0F172A" />
+              <Ionicons name="close" size={20} color={colors.textPrimary} />
             </TouchableOpacity>
 
             {technician?.image ? (
@@ -1029,7 +1198,7 @@ const hasCoordinates =
                     <Ionicons name="time-outline" size={14} color="#4757E7" />
                   </View>
                   <Text style={styles.technicianModalDetailText} numberOfLines={1}>
-                    {technician.experience} {t('yearsExperience', language)}
+                    {technician.experience}
                   </Text>
                 </View>
               )}
@@ -1078,11 +1247,11 @@ const hasCoordinates =
 
 export default BookingDetailsScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   scrollContent: {
@@ -1093,14 +1262,14 @@ const styles = StyleSheet.create({
   // ── Loader / Not-found ────────────────────────────────────────────────────
   loaderContainer: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
   },
 
   loaderCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     paddingVertical: 44,
     paddingHorizontal: 48,
@@ -1116,7 +1285,7 @@ const styles = StyleSheet.create({
   loaderText: {
     fontFamily: Fonts.medium,
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   notFoundIconWrap: {
@@ -1131,7 +1300,7 @@ const styles = StyleSheet.create({
   notFoundTitle: {
     fontFamily: Fonts.semiBold,
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     textAlign: 'center',
   },
 
@@ -1153,12 +1322,12 @@ const styles = StyleSheet.create({
 
   // ── Hero card ─────────────────────────────────────────────────────────────
   heroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.07,
     shadowRadius: 14,
@@ -1176,7 +1345,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -1190,7 +1359,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.3,
     lineHeight: 28,
   },
@@ -1209,7 +1378,7 @@ const styles = StyleSheet.create({
   },
 
   bookingNo: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 12,
     fontFamily: Fonts.medium,
   },
@@ -1221,7 +1390,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     paddingTop: 18,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.divider,
     gap: 16,
   },
 
@@ -1249,11 +1418,11 @@ const styles = StyleSheet.create({
   heroStatDivider: {
     width: 1,
     height: 36,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
   },
 
   heroLabel: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 11,
     fontFamily: Fonts.medium,
     textTransform: 'uppercase',
@@ -1262,7 +1431,7 @@ const styles = StyleSheet.create({
   },
 
   heroValue: {
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: Fonts.semiBold,
   },
@@ -1315,7 +1484,7 @@ const styles = StyleSheet.create({
   serviceNameText: {
     fontSize: 15,
     fontFamily: Fonts.semiBold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     lineHeight: 20,
   },
 
@@ -1323,7 +1492,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 13,
     fontFamily: Fonts.regular,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   addOnsWrap: {
@@ -1333,7 +1502,7 @@ const styles = StyleSheet.create({
   addOnsLabel: {
     fontSize: 12,
     fontFamily: Fonts.medium,
-    color: '#94A3B8',
+    color: colors.textHint,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 8,
@@ -1364,7 +1533,7 @@ const styles = StyleSheet.create({
 
   amountDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     marginBottom: 14,
   },
 
@@ -1394,12 +1563,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.divider,
   },
 
   finalAmountLabel: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
@@ -1437,7 +1606,7 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 11,
     fontFamily: Fonts.medium,
-    color: '#94A3B8',
+    color: colors.textHint,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
     marginBottom: 2,
@@ -1446,7 +1615,7 @@ const styles = StyleSheet.create({
   infoValue: {
     fontSize: 14,
     fontFamily: Fonts.semiBold,
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
 
   // ── Address ───────────────────────────────────────────────────────────────
@@ -1470,7 +1639,7 @@ const styles = StyleSheet.create({
   value: {
     flex: 1,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.medium,
     lineHeight: 22,
   },
@@ -1497,11 +1666,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.divider,
   },
 
   technicianAvatarImage: {
@@ -1541,7 +1710,7 @@ const styles = StyleSheet.create({
   technicianNameText: {
     fontSize: 15,
     fontFamily: Fonts.semiBold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     flexShrink: 1,
   },
 
@@ -1572,7 +1741,7 @@ const styles = StyleSheet.create({
   technicianMetaText: {
     fontSize: 13,
     fontFamily: Fonts.regular,
-    color: '#64748B',
+    color: colors.textSecondary,
     flexShrink: 1,
   },
 
@@ -1633,7 +1802,7 @@ const styles = StyleSheet.create({
 
   technicianModalCard: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 28,
     paddingTop: 20,
     paddingHorizontal: 24,
@@ -1651,7 +1820,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
@@ -1684,7 +1853,7 @@ const styles = StyleSheet.create({
   technicianModalName: {
     fontSize: 18,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 8,
   },
 
@@ -1710,7 +1879,7 @@ const styles = StyleSheet.create({
   technicianModalDivider: {
     height: 1,
     width: '100%',
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     marginVertical: 16,
   },
 
@@ -1740,7 +1909,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontFamily: Fonts.medium,
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
 
   technicianModalCallButton: {
@@ -1773,7 +1942,7 @@ const styles = StyleSheet.create({
   technicianModalCloseTextBtnText: {
     fontSize: 14,
     fontFamily: Fonts.semiBold,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   // ── Technician placeholder ─────────────────────────────────────────────────
@@ -1781,11 +1950,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#F1F5F9',
+    borderColor: colors.divider,
     borderStyle: 'dashed',
   },
 
@@ -1793,7 +1962,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -1803,13 +1972,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontFamily: Fonts.medium,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 19,
   },
 
   // ── Payment card extras ────────────────────────────────────────────────────
   label: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 14,
     fontFamily: Fonts.medium,
   },
@@ -1889,7 +2058,7 @@ const styles = StyleSheet.create({
   retryWarningSubtitle: {
     fontSize: 13,
     fontFamily: Fonts.regular,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
 
@@ -1928,7 +2097,7 @@ const styles = StyleSheet.create({
 
   info: {
     flex: 1,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 22,
     fontFamily: Fonts.regular,
     fontSize: 14,
@@ -1953,5 +2122,33 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontFamily: Fonts.semiBold,
+  },
+
+  homeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 8,
+    backgroundColor: `${colors.primary}1A`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}33`,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+
+  homeBtnText: {
+    color: colors.primary,
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+  },
+
+  invoiceBox: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.divider,
+    backgroundColor: colors.background,
   },
 });

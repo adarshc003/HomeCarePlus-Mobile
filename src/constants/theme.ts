@@ -13,6 +13,12 @@ export interface ThemeColors {
   warning: string;
   error: string;
   statusBarStyle: 'dark-content' | 'light-content';
+  // Solid (non-alpha) background for the selected state of elevated,
+  // selectable list cards. Deliberately opaque — see selectedCardBackground
+  // usage sites for why: Android's elevation/shadow rendering requires an
+  // opaque background on the same view, and a translucent fill there
+  // produces a visible extra-rectangle artifact.
+  selectedCardBackground: string;
 }
 
 // Current, final Light Theme — values kept exactly as already used
@@ -32,6 +38,7 @@ export const LIGHT_COLORS: ThemeColors = {
   warning: '#F59E0B',
   error: '#EF4444',
   statusBarStyle: 'dark-content',
+  selectedCardBackground: '#EFF6FF',
 };
 
 export const DARK_COLORS: ThemeColors = {
@@ -49,4 +56,5 @@ export const DARK_COLORS: ThemeColors = {
   warning: '#F59E0B',
   error: '#EF4444',
   statusBarStyle: 'light-content',
+  selectedCardBackground: '#1E3A5F',
 };

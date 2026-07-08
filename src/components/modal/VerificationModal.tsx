@@ -18,6 +18,8 @@ import QRCode from 'react-native-qrcode-svg';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import StarRating from '../review/StarRating';
 
 import {submitReview} from '../../services/bookingService';
@@ -51,6 +53,9 @@ const VerificationModal = ({
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const handleSubmit = async () => {
     if (rating === 0) {
@@ -167,18 +172,18 @@ const VerificationModal = ({
                 style={{
                   width: '100%',
                   borderWidth: 1,
-                  borderColor: '#E2E8F0',
+                  borderColor: colors.border,
                   borderRadius: 14,
                   padding: 14,
                   minHeight: 100,
                   marginTop: 15,
-                  color: '#0F172A',
+                  color: colors.textPrimary,
                   fontFamily: Fonts.regular,
                   textAlignVertical: 'top',
                 }}
                 multiline
                 placeholder={t('writeYourReview', language)}
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={colors.textHint}
                 value={review}
                 onChangeText={setReview}
               />
@@ -214,7 +219,7 @@ const VerificationModal = ({
 
 export default VerificationModal;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   overlay: {
     flex: 1,
@@ -226,7 +231,7 @@ const styles = StyleSheet.create({
 
   card: {
     width: '100%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 28,
     padding: 24,
     alignItems: 'center',
@@ -235,17 +240,20 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
 
   subtitle: {
     marginTop: 10,
     textAlign: 'center',
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 22,
     fontFamily: Fonts.medium,
   },
 
+  // Deliberately kept hardcoded white in every theme — a dark background
+  // here would sit behind the QR code's own white quiet-zone and can break
+  // scanner contrast/reliability, so this box must not follow dark mode.
   qrBox: {
     marginVertical: 28,
     padding: 18,
@@ -255,13 +263,13 @@ const styles = StyleSheet.create({
 
   booking: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
   waiting: {
     marginTop: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     fontFamily: Fonts.medium,
   },

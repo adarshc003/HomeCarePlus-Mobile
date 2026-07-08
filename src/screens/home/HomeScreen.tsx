@@ -6,10 +6,14 @@ import CategorySection from './CategorySection';
 import HeroSection from './HeroSection';
 import FeaturedSection from './FeaturedSection';
 import { startBackgroundLoading } from '../../init/backgroundLoader';
+import { useTheme } from '../../hooks/useTheme';
 
 const DOCK_HEIGHT = 150;
 
 const HomeScreen = ({ navigation }: any) => {
+  const { colors, isDark } = useTheme();
+  const styles = createStyles(colors, isDark);
+
   useEffect(() => {
     startBackgroundLoading();
   }, []);
@@ -155,10 +159,13 @@ onScroll={event => {
 
 export default HomeScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors'], isDark: boolean) => StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#F0F4FF',
+    // '#F0F4FF' is the approved Light Theme backdrop and must stay exactly
+    // as-is; Dark Mode falls back to the shared page background instead of
+    // extending the theme system for this one decorative tint.
+    backgroundColor: isDark ? colors.background : '#F0F4FF',
   },
   container: {
     flex: 1,
@@ -177,7 +184,7 @@ const styles = StyleSheet.create({
   // premium floating-panel look with a soft diffused shadow,
   // no hard line, no gradient fade needed.
   dockSolid: {
-    backgroundColor: '#ffffffe0',
+    backgroundColor: isDark ? 'rgba(30,41,59,0.92)' : '#ffffffe0',
     paddingTop: 40, // clears status bar/notch — tune to your device
     paddingHorizontal: 20,
     paddingBottom: 14,

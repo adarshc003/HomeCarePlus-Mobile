@@ -47,6 +47,8 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {useLanguageStore} from '../../store/languageStore';
 
 import {t} from '../../i18n';
@@ -71,6 +73,9 @@ const AddressScreen = ({navigation}: any) => {
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const cachedAddresses = useAppDataStore(
     state => state.addresses,
@@ -378,9 +383,11 @@ const AddressScreen = ({navigation}: any) => {
         setShowForm(false);
         setAddressSaved(true);
         setEditingAddressId(null);
-        setName('');
-        setSecondaryNumber('');
-        setAddressText('');
+        setName(updatedAddress.customerName || '');
+        setSecondaryNumber(updatedAddress.secondaryPhone || '');
+        setAddressText(updatedAddress.fullAddress || '');
+        setLatitude(updatedAddress.latitude);
+        setLongitude(updatedAddress.longitude);
 
         showSuccess(t('addressUpdatedSuccessfully', language));
 
@@ -412,12 +419,14 @@ const AddressScreen = ({navigation}: any) => {
         await updateUser({...authUser, name: customerName});
       }
 
-      setSelectedSavedAddress(response.data.address);
+      setSelectedSavedAddress(newAddress);
       setShowForm(false);
       setAddressSaved(true);
-      setName('');
-      setSecondaryNumber('');
-      setAddressText('');
+      setName(newAddress.customerName || '');
+      setSecondaryNumber(newAddress.secondaryPhone || '');
+      setAddressText(newAddress.fullAddress || '');
+      setLatitude(newAddress.latitude);
+      setLongitude(newAddress.longitude);
 
       showSuccess(t('addressSavedSuccessfully', language));
     } catch (error: any) {
@@ -502,7 +511,7 @@ const AddressScreen = ({navigation}: any) => {
                     : 'chevron-back'
                 }
                 size={22}
-                color="#0F172A"
+                color={colors.textPrimary}
               />
             </TouchableOpacity>
 
@@ -618,10 +627,6 @@ const AddressScreen = ({navigation}: any) => {
                         setShowForm(false);
                       }}>
 
-                      {isSelected && (
-                        <View style={styles.selectedTopBar} />
-                      )}
-
                       <View style={styles.savedCardTop}>
                         <View style={[
                           styles.labelChip,
@@ -634,7 +639,7 @@ const AddressScreen = ({navigation}: any) => {
                                 : 'home'
                             }
                             size={13}
-                            color={isSelected ? '#2563EB' : '#64748B'}
+                            color={isSelected ? colors.primary : colors.textSecondary}
                           />
                           <Text style={[
                             styles.savedLabel,
@@ -780,7 +785,7 @@ const AddressScreen = ({navigation}: any) => {
                 <Ionicons
                   name="home-outline"
                   size={17}
-                  color={addressType === 'Home' ? '#FFFFFF' : '#64748B'}
+                  color={addressType === 'Home' ? '#FFFFFF' : colors.textSecondary}
                 />
                 <Text style={[
                   styles.typeText,
@@ -800,7 +805,7 @@ const AddressScreen = ({navigation}: any) => {
                 <Ionicons
                   name="business-outline"
                   size={17}
-                  color={addressType === 'Office' ? '#FFFFFF' : '#64748B'}
+                  color={addressType === 'Office' ? '#FFFFFF' : colors.textSecondary}
                 />
                 <Text style={[
                   styles.typeText,
@@ -1104,7 +1109,7 @@ const AddressScreen = ({navigation}: any) => {
 
 export default AddressScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   root: {
     flex: 1,
@@ -1112,7 +1117,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   scrollContent: {
@@ -1136,7 +1141,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -1148,14 +1153,14 @@ const styles = StyleSheet.create({
 
   heading: {
     fontSize: 26,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 3,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     fontFamily: Fonts.regular,
     lineHeight: 18,
@@ -1184,7 +1189,7 @@ const styles = StyleSheet.create({
   savedTitle: {
     fontSize: 17,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
 
@@ -1235,24 +1240,24 @@ const styles = StyleSheet.create({
   emptyAddressTitle: {
     fontFamily: Fonts.semiBold,
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 6,
   },
 
   emptyAddressSubtitle: {
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   savedCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     position: 'relative',
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     overflow: 'hidden',
     shadowColor: '#64748B',
     shadowOpacity: 0.06,
@@ -1262,23 +1267,9 @@ const styles = StyleSheet.create({
   },
 
   selectedSavedCard: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FAFBFF',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-
-  selectedTopBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#2563EB',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedCardBackground,
   },
 
   savedCardTop: {
@@ -1292,7 +1283,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -1303,7 +1294,7 @@ const styles = StyleSheet.create({
   },
 
   savedLabel: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.semiBold,
     fontSize: 12,
   },
@@ -1322,7 +1313,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1348,12 +1339,12 @@ const styles = StyleSheet.create({
   customerName: {
     fontSize: 16,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 3,
   },
 
   phone: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.medium,
     fontSize: 13,
     marginBottom: 8,
@@ -1392,7 +1383,7 @@ const styles = StyleSheet.create({
   },
 
   formContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 20,
     marginBottom: 25,
@@ -1414,7 +1405,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -1423,12 +1414,12 @@ const styles = StyleSheet.create({
   formTitle: {
     fontSize: 18,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
 
   formSubtitle: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 12,
     fontFamily: Fonts.regular,
     marginTop: 2,
@@ -1444,7 +1435,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 48,
     borderRadius: 14,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
@@ -1452,7 +1443,7 @@ const styles = StyleSheet.create({
   },
 
   activeType: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     shadowColor: '#2563EB',
     shadowOpacity: 0.28,
     shadowRadius: 8,
@@ -1460,7 +1451,7 @@ const styles = StyleSheet.create({
   },
 
   typeText: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.semiBold,
     fontSize: 14,
   },
@@ -1470,13 +1461,13 @@ const styles = StyleSheet.create({
   },
 
   fieldCard: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   fieldLabelRow: {
@@ -1496,7 +1487,7 @@ const styles = StyleSheet.create({
 
   singleInput: {
     height: 44,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 15,
     fontFamily: Fonts.medium,
     paddingVertical: 0,
@@ -1516,14 +1507,14 @@ const styles = StyleSheet.create({
 
   country: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
   countryDivider: {
     width: 1,
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     marginLeft: 8,
     marginRight: 4,
   },
@@ -1541,7 +1532,7 @@ const styles = StyleSheet.create({
 
   modalCard: {
     width: '82%',
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -1553,24 +1544,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.divider,
   },
 
   countryItemText: {
     fontFamily: Fonts.medium,
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
 
   countryCode: {
     fontFamily: Fonts.semiBold,
     fontSize: 15,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 
   readOnlyInput: {
     height: 44,
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 15,
     fontFamily: Fonts.regular,
     paddingVertical: 0,
@@ -1580,7 +1571,7 @@ const styles = StyleSheet.create({
     minHeight: 110,
     textAlignVertical: 'top',
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.regular,
     lineHeight: 20,
     paddingVertical: 4,
@@ -1635,7 +1626,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   map: {
@@ -1706,7 +1697,7 @@ const styles = StyleSheet.create({
   },
 
   disabledButton: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1722,7 +1713,7 @@ const styles = StyleSheet.create({
   },
 
   buttonTextDisabled: {
-    color: '#94A3B8',
+    color: colors.textHint,
   },
 
   loadingContainer: {
@@ -1734,7 +1725,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 12,
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.medium,
   },
 });

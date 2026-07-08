@@ -31,6 +31,26 @@ export const getBookings =
   return response.data;
 };
 
+export const getBookingNumberById = async (
+  id: string,
+) => {
+  const response = await API.get(
+    `/bookings/by-id/${id}`,
+  );
+
+  return response.data;
+};
+
+export const getInvoice = async (
+  bookingId: string,
+) => {
+  const response = await API.get(
+    `/bookings/${bookingId}/invoice`,
+  );
+
+  return response.data;
+};
+
 export const submitReview = async (
   bookingId: string,
   rating: number,

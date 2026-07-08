@@ -23,6 +23,7 @@ import {useLanguageStore} from '../../store/languageStore';
 
 import {t} from '../../i18n';
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 
 import Ionicons from '@react-native-vector-icons/ionicons';
 
@@ -48,6 +49,9 @@ const LoginScreen = ({
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
@@ -132,7 +136,7 @@ const LoginScreen = ({
                   : 'chevron-back'
               }
               size={20}
-              color="#0F172A"
+              color={colors.textPrimary}
             />
           </TouchableOpacity>
 
@@ -268,7 +272,7 @@ const LoginScreen = ({
 
 export default LoginScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   overlay: {
     flex: 1,
@@ -277,7 +281,7 @@ const styles = StyleSheet.create({
   },
 
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     height: '68%',
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
@@ -293,7 +297,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 10,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: 28,
   },
@@ -309,11 +313,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     flexShrink: 0,
     marginTop: 2,
   },
@@ -325,13 +329,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 4,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 20,
     fontFamily: Fonts.regular,
@@ -340,17 +344,17 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 18,
     paddingHorizontal: 14,
     height: 60,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   inputContainerFocused: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
     shadowColor: '#2563EB',
     shadowOpacity: 0.1,
     shadowRadius: 10,
@@ -376,14 +380,14 @@ const styles = StyleSheet.create({
 
   country: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
   countryDivider: {
     width: 1,
     height: 20,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     marginLeft: 8,
     marginRight: 4,
   },
@@ -391,7 +395,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.medium,
     paddingVertical: 0,
     letterSpacing: 0.5,
@@ -412,7 +416,7 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 56,
     borderRadius: 16,
     flexDirection: 'row',
@@ -452,7 +456,7 @@ const styles = StyleSheet.create({
   },
 
   footer: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 12,
     fontFamily: Fonts.regular,
   },
@@ -466,7 +470,7 @@ const styles = StyleSheet.create({
 
   modalCard: {
     width: '82%',
-    backgroundColor: '#FFF',
+    backgroundColor: colors.card,
     borderRadius: 20,
     overflow: 'hidden',
   },
@@ -478,18 +482,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: colors.divider,
   },
 
   countryItemText: {
     fontFamily: Fonts.medium,
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
   },
 
   countryCode: {
     fontFamily: Fonts.semiBold,
     fontSize: 15,
-    color: '#64748B',
+    color: colors.textSecondary,
   },
 });

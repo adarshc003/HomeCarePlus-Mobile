@@ -28,6 +28,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import {updateEmail} from '../../services/userService';
@@ -37,6 +39,8 @@ import InAppBrowser from 'react-native-inappbrowser-reborn';
 import {
   createTamaraCheckout,
   verifyTamaraPayment,
+  createTelrCheckout,
+  verifyTelrPayment,
 } from '../../services/paymentService';
 
 import {waitForPushRegistration} from '../../services/notificationService';
@@ -59,10 +63,13 @@ const PaymentScreen = ({
       enabled: true,
     },
     {
-      id: 'telr',
+      // ERP's payment_provider Selection stores this gateway as 'teller'
+      // (hcp_booking.py) — the id here must match that exactly even though
+      // the customer-facing name is "Telr".
+      id: 'teller',
       name: 'Telr',
       icon: 'card-outline' as const,
-      enabled: false,
+      enabled: true,
     },
     {
       id: 'tabby',
@@ -105,6 +112,9 @@ const selectedSlotStartHour = useBookingStore(
   const finalAmount = useOfferStore(state => state.finalAmount);
 
   const language = useLanguageStore(state => state.language);
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const addOnTotal = selectedAddOns.reduce(
     (total, item) => total + item.price,
@@ -167,6 +177,9 @@ timeSlot: selectedTimeSlot,
 
   // ── Start Tamara checkout after email is confirmed ─────────────────────────
   const startTamaraPayment = async () => {
+    if (loading) {
+      return;
+    }
     if (!selectedService) {
       return;
     }
@@ -311,6 +324,124 @@ navigation.replace(
 }
   };
 
+  // ── Start Telr checkout ─────────────────────────────────────────────────────
+  const startTelrPayment = async () => {
+    if (loading) {
+      return;
+    }
+    if (!selectedService) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await waitForPushRegistration();
+
+      const bookingResponse = await createBooking(
+        buildBookingPayload('ONLINE', 'teller'),
+      );
+
+      const booking = bookingResponse.booking;
+
+      bookingIdRef.current = booking.id;
+      bookingNumberRef.current = booking.bookingNumber;
+
+      // Checkout creation is isolated from the outer catch below: that
+      // catch's fallback (re-verify, then fall back to BookingDetails) is
+      // meant for a failure AFTER a checkout session already exists — e.g.
+      // the browser was opened but verification hit a network hiccup. If
+      // checkout creation itself never succeeded there is nothing to verify
+      // yet, and silently falling back there just hides the real error
+      // (e.g. a gateway rejecting the request) behind a blank navigation.
+      let checkoutResponse;
+
+      try {
+        checkoutResponse = await createTelrCheckout(booking.id);
+      } catch (checkoutError: any) {
+        console.log(checkoutError);
+
+        Alert.alert(
+          'Payment Error',
+          checkoutError?.response?.data?.message ||
+            'Unable to start Telr checkout.',
+        );
+
+        navigation.replace('BookingDetails', {
+          bookingNumber: bookingNumberRef.current,
+        });
+
+        return;
+      }
+
+      const checkoutUrl = checkoutResponse.checkoutUrl;
+
+      const available = await InAppBrowser.isAvailable();
+
+      if (available) {
+        await InAppBrowser.openAuth(
+          checkoutUrl,
+          'homecareplus://payment',
+          {
+            dismissButtonStyle: 'close',
+            showTitle: true,
+            enableUrlBarHiding: true,
+            enableDefaultShare: false,
+          },
+        );
+      } else {
+        await Linking.openURL(checkoutUrl);
+      }
+
+      const verify = await verifyTelrPayment(booking.id);
+
+      if (verify.paymentStatus === 'paid') {
+        navigation.replace('BookingSuccess', {
+          paymentMethod: 'ONLINE',
+          paymentStatus: 'PAID',
+        });
+      } else {
+        navigation.replace('BookingDetails', {
+          bookingNumber: bookingNumberRef.current,
+        });
+      }
+    } catch (error: any) {
+      console.log(error);
+
+      if (bookingIdRef.current) {
+        try {
+          const verify = await verifyTelrPayment(bookingIdRef.current);
+
+          if (verify.paymentStatus === 'paid') {
+            navigation.replace('BookingSuccess', {
+              paymentMethod: 'ONLINE',
+              paymentStatus: 'PAID',
+            });
+          } else {
+            navigation.replace('BookingDetails', {
+              bookingNumber: bookingNumberRef.current,
+            });
+          }
+
+          return;
+        } catch (e) {
+          navigation.replace('BookingDetails', {
+            bookingNumber: bookingNumberRef.current,
+          });
+
+          return;
+        }
+      }
+
+      Alert.alert(
+        'Payment Error',
+        'Unable to start payment.',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ── Save email, update if changed, then proceed ────────────────────────────
 const saveEmail = async () => {
 
@@ -346,7 +477,13 @@ Alert.alert(
       setEmailModalVisible(false);
 
       await startTamaraPayment();
-    } catch (error) {
+    } catch (error: any) {
+      console.log(error);
+
+      Alert.alert(
+        'Payment Error',
+        error?.response?.data?.message || 'Unable to update email.',
+      );
     } finally {
       setLoading(false);
     }
@@ -380,6 +517,12 @@ Alert.alert(
         paymentStatus: 'PENDING',
       });
     } catch (error: any) {
+      console.log(error);
+
+      Alert.alert(
+        'Booking Error',
+        error?.response?.data?.message || 'Unable to confirm booking.',
+      );
     } finally {
       setLoading(false);
     }
@@ -405,7 +548,7 @@ Alert.alert(
                     : 'chevron-back'
                 }
                 size={22}
-                color="#0F172A"
+                color={colors.textPrimary}
               />
             </TouchableOpacity>
 
@@ -516,7 +659,7 @@ Alert.alert(
                 <Ionicons
                   name="card-outline"
                   size={22}
-                  color={paymentMethod === 'ONLINE' ? '#2563EB' : '#64748B'}
+                  color={paymentMethod === 'ONLINE' ? colors.primary : colors.textSecondary}
                 />
               </View>
 
@@ -561,7 +704,7 @@ Alert.alert(
                 <Ionicons
                   name="cash-outline"
                   size={22}
-                  color={paymentMethod === 'COD' ? '#2563EB' : '#64748B'}
+                  color={paymentMethod === 'COD' ? colors.primary : colors.textSecondary}
                 />
               </View>
 
@@ -663,7 +806,7 @@ Alert.alert(
                       !provider.enabled && styles.providerRowDisabled,
                     ]}
                     activeOpacity={provider.enabled ? 0.8 : 1}
-                    disabled={!provider.enabled}
+                    disabled={!provider.enabled || loading}
                     onPress={() => setSelectedProvider(provider.id)}>
 
                     <View style={[
@@ -677,8 +820,8 @@ Alert.alert(
                           !provider.enabled
                             ? '#CBD5E1'
                             : isSelected
-                            ? '#2563EB'
-                            : '#64748B'
+                            ? colors.primary
+                            : colors.textSecondary
                         }
                       />
                     </View>
@@ -712,12 +855,21 @@ Alert.alert(
             </View>
 
             <TouchableOpacity
-              style={styles.sheetContinueButton}
+              style={[
+                styles.sheetContinueButton,
+                loading && styles.buttonDisabled,
+              ]}
               activeOpacity={0.85}
+              disabled={loading}
               onPress={() => {
                 setProviderModalVisible(false);
-                setEmail(user?.email || '');
-                setEmailModalVisible(true);
+
+                if (selectedProvider === 'tamara') {
+                  setEmail(user?.email || '');
+                  setEmailModalVisible(true);
+                } else if (selectedProvider === 'teller') {
+                  startTelrPayment();
+                }
               }}>
               <Text style={styles.sheetContinueText}>
                 {t('continue', language)}
@@ -744,7 +896,7 @@ Alert.alert(
 
           <View
             style={{
-              backgroundColor: '#fff',
+              backgroundColor: colors.card,
               borderRadius: 20,
               padding: 20,
             }}>
@@ -753,7 +905,7 @@ Alert.alert(
   style={{
     fontSize: 20,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 15,
   }}>
   {t('emailRequired', language)}
@@ -762,15 +914,15 @@ Alert.alert(
               value={email}
               onChangeText={setEmail}
               placeholder={t('enterEmail', language)}
-              placeholderTextColor="#9CA3AF"
+              placeholderTextColor={colors.textHint}
               keyboardType="email-address"
               autoCapitalize="none"
               style={{
                 borderWidth: 1,
-                borderColor: '#ddd',
+                borderColor: colors.border,
                 borderRadius: 12,
                 padding: 14,
-                color: '#000000',
+                color: colors.textPrimary,
                 fontFamily: Fonts.regular,
               }}
             />
@@ -779,7 +931,7 @@ Alert.alert(
               onPress={saveEmail}
               disabled={loading}
               style={{
-                backgroundColor: '#2563EB',
+                backgroundColor: colors.primary,
                 marginTop: 20,
                 padding: 16,
                 borderRadius: 12,
@@ -809,11 +961,11 @@ Alert.alert(
 
 export default PaymentScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   scrollContent: {
@@ -837,7 +989,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -849,14 +1001,14 @@ const styles = StyleSheet.create({
 
   heading: {
     fontSize: 26,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
 
   subHeading: {
     marginTop: 3,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     fontFamily: Fonts.regular,
     lineHeight: 18,
@@ -864,13 +1016,13 @@ const styles = StyleSheet.create({
 
   // ── Amount Card ──────────────────────────
   amountCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     paddingVertical: 24,
     paddingHorizontal: 20,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.07,
     shadowRadius: 12,
@@ -886,14 +1038,14 @@ const styles = StyleSheet.create({
   },
 
   amountLabel: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     fontFamily: Fonts.medium,
   },
 
   bigAmount: {
     fontSize: 38,
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
     marginBottom: 16,
@@ -901,7 +1053,7 @@ const styles = StyleSheet.create({
 
   amountDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     marginBottom: 16,
   },
 
@@ -917,13 +1069,13 @@ const styles = StyleSheet.create({
 
   priceLabel: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.regular,
   },
 
   priceValue: {
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
@@ -952,18 +1104,18 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.divider,
   },
 
   totalLabel: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
   totalValue: {
     fontSize: 18,
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.bold,
   },
 
@@ -993,18 +1145,18 @@ const styles = StyleSheet.create({
 
   paymentTitle: {
     fontSize: 18,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 14,
     fontFamily: Fonts.bold,
     letterSpacing: -0.2,
   },
 
   methodCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 18,
     marginBottom: 12,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     overflow: 'hidden',
     shadowColor: '#64748B',
     shadowOpacity: 0.05,
@@ -1014,12 +1166,9 @@ const styles = StyleSheet.create({
   },
 
   selectedMethod: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FAFBFF',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 4,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedCardBackground,
   },
 
   methodRow: {
@@ -1033,14 +1182,14 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
 
   methodIconWrapSelected: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: `${colors.primary}1A`,
   },
 
   methodTextBlock: {
@@ -1049,16 +1198,16 @@ const styles = StyleSheet.create({
 
   methodTitle: {
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
   methodTitleSelected: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   methodDesc: {
-    color: '#64748B',
+    color: colors.textSecondary,
     marginTop: 3,
     lineHeight: 18,
     fontSize: 12,
@@ -1066,25 +1215,25 @@ const styles = StyleSheet.create({
   },
 
   radioOuter: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
   },
 
   radioOuterSelected: {
-    borderColor: '#2563EB',
+    borderColor: colors.primary,
   },
 
   radioInner: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 5,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   // ── Payment Provider Sheet ───────────────
@@ -1095,7 +1244,7 @@ const styles = StyleSheet.create({
   },
 
   sheetCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: 20,
@@ -1107,14 +1256,14 @@ const styles = StyleSheet.create({
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: 18,
   },
 
   sheetTitle: {
     fontSize: 19,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.2,
     textAlign: 'center',
@@ -1123,7 +1272,7 @@ const styles = StyleSheet.create({
   sheetSubtitle: {
     marginTop: 4,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.regular,
     textAlign: 'center',
     marginBottom: 20,
@@ -1141,46 +1290,47 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.border,
+    backgroundColor: colors.card,
   },
 
   providerRowSelected: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FAFBFF',
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedCardBackground,
   },
 
   providerRowDisabled: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#F1F5F9',
+    backgroundColor: colors.background,
+    borderColor: colors.divider,
   },
 
   providerIconWrap: {
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   providerIconWrapSelected: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: `${colors.primary}1A`,
   },
 
   providerName: {
     flex: 1,
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.semiBold,
   },
 
   providerNameDisabled: {
-    color: '#94A3B8',
+    color: colors.textHint,
   },
 
   comingSoonBadge: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 20,
@@ -1188,17 +1338,17 @@ const styles = StyleSheet.create({
 
   comingSoonText: {
     fontSize: 11,
-    color: '#94A3B8',
+    color: colors.textHint,
     fontFamily: Fonts.semiBold,
   },
 
   sheetContinueButton: {
     height: 56,
     borderRadius: 16,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOpacity: 0.3,
     shadowRadius: 12,
     shadowOffset: {width: 0, height: 5},
@@ -1223,11 +1373,11 @@ const styles = StyleSheet.create({
   button: {
     height: 58,
     borderRadius: 18,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#2563EB',
+    shadowColor: colors.primary,
     shadowOpacity: 0.35,
     shadowRadius: 14,
     shadowOffset: {width: 0, height: 6},

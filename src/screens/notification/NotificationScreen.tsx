@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useRef} from 'react';
 
 import {
   FlatList,
@@ -27,6 +27,8 @@ import {
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {t} from '../../i18n';
 
 import NotificationCard from '../../components/common/NotificationCard';
@@ -47,6 +49,9 @@ const NotificationScreen = () => {
 
   const navigation = useNavigation();
 
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
+
   const {
     notifications,
     setNotifications,
@@ -54,22 +59,30 @@ const NotificationScreen = () => {
     refreshing,
     setLoading,
     setRefreshing,
-    markRead,
-    setUnreadCount,
+    markAllRead,
   } =
     useNotificationStore();
 
+  // Bumped whenever a local mutation (mark-all-read) commits, so a fetch
+  // that was already in flight before that mutation can detect it's now
+  // stale and skip overwriting the corrected state when it finally resolves.
+  const stateVersionRef = useRef(0);
+
   const loadNotifications =
     async () => {
+      const requestVersion = stateVersionRef.current;
+
       try {
         setLoading(true);
 
         const response =
           await getNotifications();
 
-        setNotifications(
-          response.data.notifications,
-        );
+        if (requestVersion === stateVersionRef.current) {
+          setNotifications(
+            response.data.notifications,
+          );
+        }
       } catch (error) {
         console.log(error);
       } finally {
@@ -97,16 +110,11 @@ const NotificationScreen = () => {
       try {
         await markAllNotificationsRead();
 
-        notifications.forEach(item => {
-          const id =
-            item._id || item.id;
+        // Invalidate any load that started before this point — if it
+        // resolves after this, it's carrying pre-mark-all-read data.
+        stateVersionRef.current += 1;
 
-          if (id && !item.isRead) {
-            markRead(id);
-          }
-        });
-
-        setUnreadCount(0);
+        markAllRead();
       } catch (error) {
         console.log(error);
       }
@@ -154,7 +162,7 @@ const NotificationScreen = () => {
                   : 'chevron-back'
               }
               size={22}
-              color="#0F172A"
+              color={colors.textPrimary}
             />
           </TouchableOpacity>
 
@@ -178,7 +186,7 @@ const NotificationScreen = () => {
             <Icon
               name="checkmark-done-outline"
               size={16}
-              color="#4757E7"
+              color={colors.primary}
             />
             <Text style={styles.markAllText}>
               {t('markAllRead', language)}
@@ -226,10 +234,10 @@ const NotificationScreen = () => {
 
 export default NotificationScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   header: {
@@ -251,7 +259,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -263,14 +271,14 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontFamily: Fonts.bold,
     fontSize: 24,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.3,
   },
 
   headerSubtitle: {
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     marginTop: 2,
   },
 
@@ -278,21 +286,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: `${colors.primary}1A`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}33`,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
   },
 
   markAllText: {
-    fontFamily: Fonts.medium,
+    fontFamily: Fonts.semiBold,
     fontSize: 13,
-    color: '#4757E7',
+    color: colors.primary,
   },
 
   divider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     marginHorizontal: 20,
     marginBottom: 2,
   },
@@ -327,7 +337,7 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: Fonts.semiBold,
     fontSize: 18,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -335,7 +345,7 @@ const styles = StyleSheet.create({
   emptySubtitle: {
     fontFamily: Fonts.regular,
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },

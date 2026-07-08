@@ -24,6 +24,11 @@ from '../../i18n';
 import {Fonts}
 from '../../constants/fonts';
 
+import {useTheme}
+from '../../hooks/useTheme';
+
+import Ionicons from '@react-native-vector-icons/ionicons';
+
 import {getLocalizedText}
 from '../../utils/getLocalizedText';
 
@@ -64,6 +69,9 @@ const BookingSummaryScreen = ({
     useLanguageStore(
       state => state.language,
     );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const cachedOffers =
     useAppDataStore(
@@ -267,10 +275,17 @@ const BookingSummaryScreen = ({
           <View style={styles.topRow}>
             <TouchableOpacity
               onPress={() => navigation.goBack()}
-              style={styles.backButton}>
-              <Text style={styles.backArrow}>
-                ‹
-              </Text>
+              style={styles.backButton}
+              activeOpacity={0.7}>
+              <Ionicons
+                name={
+                  language === 'ar'
+                    ? 'chevron-forward'
+                    : 'chevron-back'
+                }
+                size={20}
+                color={colors.textPrimary}
+              />
             </TouchableOpacity>
 
             <Text style={styles.heading}>
@@ -421,23 +436,23 @@ const BookingSummaryScreen = ({
 
 export default BookingSummaryScreen;
 
-const styles =
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
 container: {
   flex: 1,
-  backgroundColor: '#F8FAFC',
+  backgroundColor: colors.background,
   paddingTop: 18,
 },
 heading: {
   flex: 1,
   fontSize: 28,
-  color: '#0F172A',
+  color: colors.textPrimary,
   fontFamily: Fonts.bold,
   letterSpacing: -1,
 },
 
 card: {
-  backgroundColor: '#FFFFFF',
+  backgroundColor: colors.card,
   borderRadius: 28,
   padding: 22,
   marginBottom: 18,
@@ -452,7 +467,7 @@ card: {
 
     cardTitle: {
       fontSize: 18,
-      color: '#0F172A',
+      color: colors.textPrimary,
       marginBottom: 18,
       fontFamily: Fonts.bold,
     },
@@ -464,26 +479,26 @@ card: {
     },
 
     label: {
-      color: '#64748B',
+      color: colors.textSecondary,
       fontSize: 14,
       fontFamily: Fonts.medium,
     },
 
     value: {
-      color: '#0F172A',
+      color: colors.textPrimary,
       fontSize: 14,
       fontFamily: Fonts.semiBold,
     },
 
     smallText: {
       fontSize: 13,
-      color: '#64748B',
+      color: colors.textSecondary,
       fontFamily: Fonts.medium,
     },
 
     divider: {
       height: 1,
-      backgroundColor: '#E2E8F0',
+      backgroundColor: colors.border,
       marginVertical: 14,
     },
 
@@ -496,7 +511,7 @@ card: {
 
   totalLabel: {
     fontSize: 20,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
   },
 
@@ -509,7 +524,7 @@ card: {
 
   totalHint: {
     marginTop: 4,
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 12,
     fontFamily: Fonts.medium,
   },
@@ -524,7 +539,7 @@ card: {
     addressCard: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: '#F8FAFC',
+      backgroundColor: colors.background,
       padding: 14,
       borderRadius: 16,
       marginTop: 8,
@@ -538,7 +553,7 @@ card: {
 
   addressText: {
     flex: 1,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 14,
     lineHeight: 22,
     fontFamily: Fonts.medium,
@@ -579,18 +594,12 @@ card: {
     width: 40,
     height: 40,
     borderRadius: 14,
-    backgroundColor: '#E5E7EB',
+    backgroundColor: colors.backgroundSecondary,
+    borderWidth: 1,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
-  },
-
-  backArrow: {
-    fontSize: 28,
-    color: '#0F172A',
-    fontFamily: Fonts.semiBold,
-    lineHeight: 28,
-    includeFontPadding: false,
   },
 
   headerTag: {
@@ -604,7 +613,7 @@ card: {
   headerSubtext: {
     marginTop: 12,
     marginLeft: 25,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 18,
     fontFamily: Fonts.semiBold,
   },
@@ -645,7 +654,7 @@ card: {
   serviceSubTitle: {
     marginTop: 4,
     marginLeft: 25,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 14,
     lineHeight: 22,
     fontFamily: Fonts.medium,

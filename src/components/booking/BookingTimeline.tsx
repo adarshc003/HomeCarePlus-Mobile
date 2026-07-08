@@ -10,6 +10,8 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {useLanguageStore} from '../../store/languageStore';
 
 import {t} from '../../i18n';
@@ -22,6 +24,11 @@ const getCurrentIndex = (
   switch (status) {
 
     case 'pending':
+    // Still awaiting technician acceptance — same timeline position as
+    // 'pending', not yet 'assigned'. Handled explicitly (not via the
+    // default branch) so it can't silently fall out of sync if more
+    // statuses are added later.
+    case 'pending_assignment':
       return 0;
 
     case 'accepted':
@@ -56,6 +63,9 @@ const BookingTimeline = ({
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const steps = [
 
@@ -141,7 +151,7 @@ const BookingTimeline = ({
                     size={24}
                     color={
                       done
-                        ? '#22C55E'
+                        ? colors.success
                         : '#CBD5E1'
                     }
                   />
@@ -158,8 +168,8 @@ const BookingTimeline = ({
                           {
                             backgroundColor:
                               done
-                                ? '#22C55E'
-                                : '#E2E8F0',
+                                ? colors.success
+                                : colors.border,
                           },
                         ]}
                       />
@@ -196,7 +206,7 @@ const BookingTimeline = ({
 
 export default BookingTimeline;
 
-const styles =
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
 
     row: {
@@ -219,14 +229,14 @@ const styles =
     text: {
       marginLeft: 14,
       marginTop: 2,
-      color: '#64748B',
+      color: colors.textSecondary,
       fontFamily:
         Fonts.medium,
       fontSize: 15,
     },
 
     doneText: {
-      color: '#0F172A',
+      color: colors.textPrimary,
       fontFamily:
         Fonts.semiBold,
     },

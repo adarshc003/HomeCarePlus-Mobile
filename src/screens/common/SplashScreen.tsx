@@ -19,6 +19,9 @@ from '../../store/languageStore';
 import {useThemeStore}
 from '../../store/themeStore';
 
+import {useTheme}
+from '../../hooks/useTheme';
+
 import {t}
 from '../../i18n';
 
@@ -48,6 +51,9 @@ const SplashScreen = ({
     useThemeStore(
       state => state.loadThemeMode,
     );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const rotateAnim =
     useRef(
@@ -97,8 +103,8 @@ const initialize = async () => {
   return (
     <>
       <StatusBar
-        backgroundColor="#FFFFFF"
-        barStyle="dark-content"
+        backgroundColor={colors.background}
+        barStyle={colors.statusBarStyle}
       />
 
       <View style={styles.container}>
@@ -162,13 +168,13 @@ const initialize = async () => {
 
 export default SplashScreen;
 
-const styles =
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
     container: {
       flex: 1,
 
       backgroundColor:
-        '#FFFFFF',
+        colors.background,
 
       justifyContent:
         'center',
@@ -193,7 +199,7 @@ const styles =
 
       fontSize: 34,
 
-      color: '#0F172A',
+      color: colors.textPrimary,
 
       fontFamily:
         Fonts.bold,
@@ -206,7 +212,7 @@ const styles =
 
       fontSize: 16,
 
-      color: '#64748B',
+      color: colors.textSecondary,
 
       textAlign: 'center',
 
@@ -226,10 +232,10 @@ const styles =
       borderWidth: 3,
 
       borderColor:
-        '#E2E8F0',
+        colors.border,
 
       borderTopColor:
-        '#4757E7',
+        colors.primary,
 
       marginTop: 28,
 
@@ -241,7 +247,7 @@ const styles =
 
       bottom: 55,
 
-      color: '#94A3B8',
+      color: colors.textHint,
 
       fontSize: 13,
 

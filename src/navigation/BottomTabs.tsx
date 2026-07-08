@@ -16,6 +16,10 @@ import {t} from '../i18n';
 
 import {Fonts} from '../constants/fonts';
 
+import {useTheme} from '../hooks/useTheme';
+
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
 import {
   StyleSheet,
   View,
@@ -31,14 +35,18 @@ const BottomTabs = () => {
     state => state.language,
   );
 
+  const {colors} = useTheme();
+  const insets = useSafeAreaInsets();
+  const styles = createStyles(colors, insets.bottom);
+
   return (
     <Tab.Navigator
       screenOptions={({route}) => ({
         headerShown: false,
 
-        tabBarActiveTintColor: '#4757E7',
+        tabBarActiveTintColor: colors.primary,
 
-        tabBarInactiveTintColor: '#94A3B8',
+        tabBarInactiveTintColor: colors.textHint,
 
         tabBarStyle: styles.tabBar,
 
@@ -115,16 +123,17 @@ const BottomTabs = () => {
 
 export default BottomTabs;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors'], safeBottom: number) => StyleSheet.create({
 
   tabBar: {
     position: 'absolute',
-    bottom: 20,
+    bottom: Math.max(20, safeBottom),
     marginHorizontal: 60,
     height: 68,
     borderRadius: 26,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 0,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
     shadowColor: '#1E293B',
     shadowOpacity: 0.12,
     shadowRadius: 24,
@@ -139,20 +148,20 @@ const styles = StyleSheet.create({
 
   label: {
     fontSize: 11,
-    fontFamily: Fonts.medium,
+    fontFamily: Fonts.semiBold,
     marginBottom: 2,
     letterSpacing: 0.1,
   },
 
   iconWrap: {
-    width: 42,
-    height: 34,
-    borderRadius: 11,
+    width: 44,
+    height: 36,
+    borderRadius: 13,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   iconWrapActive: {
-    backgroundColor: '#EEF2FF',
+    backgroundColor: `${colors.primary}1F`,
   },
 });

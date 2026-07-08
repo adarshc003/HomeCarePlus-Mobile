@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 
 interface Props {
 
@@ -20,6 +21,9 @@ const DetailRow = ({
   label,
   value,
 }: Props) => {
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   return (
 
@@ -41,7 +45,7 @@ const DetailRow = ({
 
 export default DetailRow;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   row: {
 
@@ -55,7 +59,7 @@ const styles = StyleSheet.create({
 
   label: {
 
-    color: '#64748B',
+    color: colors.textSecondary,
 
     fontFamily: Fonts.medium,
 
@@ -65,7 +69,7 @@ const styles = StyleSheet.create({
 
   value: {
 
-    color: '#0F172A',
+    color: colors.textPrimary,
 
     fontFamily: Fonts.semiBold,
 

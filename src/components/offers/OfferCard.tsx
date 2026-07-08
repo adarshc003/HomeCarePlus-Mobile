@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import Icon from '@react-native-vector-icons/ionicons';
@@ -41,6 +42,9 @@ const OfferCard = ({
   const isPercentage =
     offer.discountType === 'PERCENTAGE';
 
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <View
       style={[
@@ -48,11 +52,6 @@ const OfferCard = ({
         applied && styles.containerApplied,
         isLast && styles.containerLast,
       ]}>
-
-      {/* Applied glow border */}
-      {applied && (
-        <View style={styles.appliedBorderTop} />
-      )}
 
       <View style={styles.topRow}>
 
@@ -73,7 +72,7 @@ const OfferCard = ({
             <Icon
               name="pricetag-outline"
               size={11}
-              color={applied ? '#2563EB' : '#16A34A'}
+              color={applied ? colors.primary : '#16A34A'}
             />
             <Text style={[
               styles.code,
@@ -133,7 +132,7 @@ const OfferCard = ({
           <Icon
             name="checkmark-circle"
             size={15}
-            color="#2563EB"
+            color={colors.primary}
             style={styles.buttonIcon}
           />
         )}
@@ -154,36 +153,26 @@ const OfferCard = ({
 
 export default OfferCard;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     overflow: 'hidden',
   },
 
   containerApplied: {
-    backgroundColor: '#FAFBFF',
-    borderColor: '#2563EB',
+    borderWidth: 2,
+    backgroundColor: colors.selectedCardBackground,
+    borderColor: colors.primary,
   },
 
   containerLast: {
     marginBottom: 0,
-  },
-
-  appliedBorderTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#2563EB',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
   },
 
   topRow: {
@@ -242,7 +231,7 @@ const styles = StyleSheet.create({
   },
 
   codeApplied: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   discountPill: {
@@ -263,7 +252,7 @@ const styles = StyleSheet.create({
   },
 
   discountPillTextApplied: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   textBlock: {
@@ -273,7 +262,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Fonts.semiBold,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     lineHeight: 20,
   },
 
@@ -281,7 +270,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 18,
   },
 
@@ -291,7 +280,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   appliedButton: {
@@ -311,7 +300,7 @@ const styles = StyleSheet.create({
   },
 
   appliedText: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
 });

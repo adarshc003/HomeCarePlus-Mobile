@@ -14,6 +14,7 @@ import {useServiceStore} from '../../store/serviceStore';
 import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 import {getLocalizedText} from '../../utils/getLocalizedText';
 
 
@@ -98,6 +99,9 @@ const FeaturedSection = ({navigation}: any) => {
   const services = useServiceStore(state => state.filteredServices);
   const language = useLanguageStore(state => state.language);
 
+  const {colors, isDark} = useTheme();
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.section}>
 
@@ -105,7 +109,7 @@ const FeaturedSection = ({navigation}: any) => {
       <View style={styles.headerRow}>
         <Text style={styles.heading}>{t('services', language)}</Text>
         <View style={styles.countBadge}>
-          <Ionicons name="list-outline" size={13} color="#2563EB" />
+          <Ionicons name="list-outline" size={13} color={colors.primary} />
           <Text style={styles.countText}>
             {services.length} {t('available', language)}
           </Text>
@@ -183,15 +187,27 @@ const icon =
                   </View>
                 </View>
 
-                {/* Fade-to-white gradient — blends image into card */}
+                {/* Fade gradient — blends image into the card body below.
+                    Same shape/stops in both themes; only the target color
+                    changes to match the card surface underneath it. */}
                 <LinearGradient
-                  colors={[
-                    'transparent',
-                    'rgba(255,255,255,0.0)',
-                    'rgba(255,255,255,0.62)',
-                    'rgba(255,255,255,0.97)',
-                    '#FFFFFF',
-                  ]}
+                  colors={
+                    isDark
+                      ? [
+                          'transparent',
+                          'rgba(30,41,59,0.0)',
+                          'rgba(30,41,59,0.62)',
+                          'rgba(30,41,59,0.97)',
+                          colors.card,
+                        ]
+                      : [
+                          'transparent',
+                          'rgba(255,255,255,0.0)',
+                          'rgba(255,255,255,0.62)',
+                          'rgba(255,255,255,0.97)',
+                          colors.card,
+                        ]
+                  }
                   locations={[0, 0.15, 0.48, 0.72, 1]}
                   style={styles.fadeGradient}>
 
@@ -221,7 +237,7 @@ const icon =
               <View style={styles.metaRow}>
                 {meta.map((item, i) => (
                   <View key={i} style={styles.metaChip}>
-                    <Ionicons name={item.icon as any} size={12} color="#64748B" />
+                    <Ionicons name={item.icon as any} size={12} color={colors.textSecondary} />
                     <Text style={styles.metaChipText}>
                       {t(item.labelKey, language)}
                     </Text>
@@ -264,7 +280,7 @@ const icon =
 
 export default FeaturedSection;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   section: {
     marginTop: 34,
@@ -279,7 +295,7 @@ const styles = StyleSheet.create({
   },
   heading: {
     fontSize: 26,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.6,
   },
@@ -287,22 +303,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#EEF4FF',
+    backgroundColor: `${colors.primary}1A`,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: `${colors.primary}33`,
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 50,
   },
   countText: {
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 11,
     fontFamily: Fonts.semiBold,
   },
 
   /* ── Card shell ── */
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 30,
     overflow: 'hidden',
     marginBottom: 24,
@@ -382,7 +398,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   cardTitle: {
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 26,
     fontFamily: Fonts.bold,
     letterSpacing: -0.6,
@@ -395,12 +411,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   priceLabel: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 11,
     fontFamily: Fonts.medium,
   },
   priceValue: {
-    color: '#1D4ED8',
+    color: colors.primary,
     fontSize: 22,
     fontFamily: Fonts.bold,
     letterSpacing: -0.4,
@@ -423,19 +439,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 50,
   },
   metaChipText: {
-    color: '#334155',
+    color: colors.textSecondary,
     fontSize: 11,
     fontFamily: Fonts.medium,
   },
 
   cardDesc: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 22,
     fontFamily: Fonts.regular,
@@ -447,7 +463,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#1D4ED8',
+    backgroundColor: colors.primary,
     paddingVertical: 15,
     borderRadius: 16,
   },

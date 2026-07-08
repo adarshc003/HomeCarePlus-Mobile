@@ -17,6 +17,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import {useBookingStore} from '../../store/bookingStore';
@@ -32,6 +34,9 @@ const BookingSuccessScreen = ({
     useLanguageStore(
       state => state.language,
     );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const paymentMethod =
     route?.params?.paymentMethod || 'COD';
@@ -126,7 +131,7 @@ const paymentStatusText =
     isCOD ? 'cash-outline' : 'card-outline';
 
   const statusColor =
-    isPaid ? '#22C55E' : '#F59E0B';
+    isPaid ? colors.success : colors.warning;
 
   const statusBg =
     isPaid ? '#F0FDF4' : '#FFFBEB';
@@ -174,7 +179,7 @@ const paymentStatusText =
           <Ionicons
             name="checkmark-circle"
             size={13}
-            color="#22C55E"
+            color={colors.success}
           />
           <Text style={styles.successTag}>
             {t('bookingConfirmedTag', language)}
@@ -218,7 +223,7 @@ const paymentStatusText =
                 <Ionicons
                   name={methodIcon}
                   size={14}
-                  color="#64748B"
+                  color={colors.textSecondary}
                 />
               </View>
               <Text style={styles.label}>
@@ -241,7 +246,7 @@ const paymentStatusText =
                       : 'time-outline'
                   }
                   size={14}
-                  color="#64748B"
+                  color={colors.textSecondary}
                 />
               </View>
               <Text style={styles.label}>
@@ -299,7 +304,7 @@ const paymentStatusText =
               : 'arrow-back'
           }
           size={16}
-          color="#4757E7"
+          color={colors.primary}
         />
         <Text style={styles.homeBtnText}>
           {t('backToHome', language)}
@@ -312,11 +317,11 @@ const paymentStatusText =
 
 export default BookingSuccessScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     paddingHorizontal: 24,
     paddingTop: 80,
     alignItems: 'center',
@@ -346,7 +351,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#22C55E',
+    backgroundColor: colors.success,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#16A34A',
@@ -376,7 +381,7 @@ const styles = StyleSheet.create({
   },
 
   successTag: {
-    color: '#22C55E',
+    color: colors.success,
     fontSize: 11,
     letterSpacing: 1.5,
     fontFamily: Fonts.semiBold,
@@ -384,7 +389,7 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 30,
-    color: '#0F172A',
+    color: colors.textPrimary,
     textAlign: 'center',
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
@@ -401,7 +406,7 @@ const styles = StyleSheet.create({
 
   description: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: colors.textHint,
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
@@ -411,12 +416,12 @@ const styles = StyleSheet.create({
   // ── Payment card ──────────────────────────────────────────────────────────
   paymentCard: {
     marginTop: 28,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 20,
     borderRadius: 24,
     width: '100%',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.07,
     shadowRadius: 14,
@@ -442,14 +447,14 @@ const styles = StyleSheet.create({
 
   paymentTitle: {
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.1,
   },
 
   divider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     marginBottom: 14,
   },
 
@@ -470,19 +475,19 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   label: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 14,
     fontFamily: Fonts.regular,
   },
 
   value: {
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 14,
     fontFamily: Fonts.semiBold,
   },
@@ -515,14 +520,16 @@ const styles = StyleSheet.create({
     gap: 7,
     marginTop: 'auto',
     marginBottom: 36,
-    backgroundColor: '#EEF2FF',
+    backgroundColor: `${colors.primary}1A`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}33`,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 14,
   },
 
   homeBtnText: {
-    color: '#4757E7',
+    color: colors.primary,
     fontSize: 14,
     fontFamily: Fonts.semiBold,
   },

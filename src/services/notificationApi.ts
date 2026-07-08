@@ -1,3 +1,5 @@
+import {Platform} from 'react-native';
+
 import API from './api';
 
 export const registerFCMToken = (
@@ -7,7 +9,7 @@ export const registerFCMToken = (
     '/notifications/register-token',
     {
       token,
-      platform: 'android',
+      platform: Platform.OS,
     },
   );
 };

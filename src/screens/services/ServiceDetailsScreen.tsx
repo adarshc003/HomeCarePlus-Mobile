@@ -19,6 +19,8 @@ import {t} from '../../i18n';
 
 import {Fonts} from '../../constants/fonts';
 
+import {useTheme} from '../../hooks/useTheme';
+
 import {getLocalizedText} from '../../utils/getLocalizedText';
 
 import LinearGradient from 'react-native-linear-gradient';
@@ -95,6 +97,9 @@ const [selectedOption, setSelectedOption] =
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors, isDark} = useTheme();
+  const styles = createStyles(colors);
 
   const serviceName = getLocalizedText(service?.name, language);
 
@@ -203,13 +208,23 @@ useEffect(() => {
           <View style={styles.darkOverlay} />
 
           <LinearGradient
-            colors={[
-              'transparent',
-              'rgba(248,250,252,0.15)',
-              'rgba(248,250,252,0.4)',
-              'rgba(248,250,252,0.8)',
-              '#F8FAFC',
-            ]}
+            colors={
+              isDark
+                ? [
+                    'transparent',
+                    'rgba(15,23,42,0.15)',
+                    'rgba(15,23,42,0.4)',
+                    'rgba(15,23,42,0.8)',
+                    colors.background,
+                  ]
+                : [
+                    'transparent',
+                    'rgba(248,250,252,0.15)',
+                    'rgba(248,250,252,0.4)',
+                    'rgba(248,250,252,0.8)',
+                    colors.background,
+                  ]
+            }
             style={styles.gradientFade}
           />
 
@@ -289,7 +304,7 @@ useEffect(() => {
                     <Ionicons
                       name={FEATURE_ICONS[i] as any}
                       size={16}
-                      color="#2563EB"
+                      color={colors.primary}
                     />
                   </View>
                   <Text style={styles.feature}>
@@ -323,11 +338,6 @@ useEffect(() => {
                 activeOpacity={0.85}
                 onPress={() => setSelectedOption(option)}>
 
-                {/* Selected accent top bar */}
-                {isSelected && (
-                  <View style={styles.selectedTopBar} />
-                )}
-
                 {/* Card top row */}
                 <View style={styles.optionTopRow}>
                   <Text style={[
@@ -337,20 +347,18 @@ useEffect(() => {
                     {getLocalizedText(option.name, language)}
                   </Text>
 
-                  {isSelected ? (
-                    <View style={styles.selectedBadge}>
+                  <View style={[
+                    styles.checkBadge,
+                    isSelected && styles.checkBadgeSelected,
+                  ]}>
+                    {isSelected && (
                       <Ionicons
                         name="checkmark"
-                        size={11}
+                        size={13}
                         color="#FFFFFF"
                       />
-                      <Text style={styles.selectedBadgeText}>
-                        {t('selected', language)}
-                      </Text>
-                    </View>
-                  ) : (
-                    <View style={styles.radioEmpty} />
-                  )}
+                    )}
+                  </View>
                 </View>
 
                 {/* Pricing row */}
@@ -379,7 +387,7 @@ useEffect(() => {
                     <Ionicons
                       name="time-outline"
                       size={13}
-                      color="#64748B"
+                      color={colors.textSecondary}
                     />
                     <Text style={styles.optionMetaText}>
                       {getLocalizedText(option.duration, language)}
@@ -390,7 +398,7 @@ useEffect(() => {
                     <Ionicons
                       name="people-outline"
                       size={13}
-                      color="#64748B"
+                      color={colors.textSecondary}
                     />
                     <Text style={styles.optionMetaText}>
                       {option.staffCount}{' '}
@@ -411,7 +419,7 @@ useEffect(() => {
                             name="checkmark-circle"
                             size={14}
                             color={
-                              isSelected ? '#2563EB' : '#22C55E'
+                              isSelected ? colors.primary : '#22C55E'
                             }
                           />
                           <Text style={styles.includesText}>
@@ -473,7 +481,7 @@ useEffect(() => {
 
 export default ServiceDetailsScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   root: {
     flex: 1,
@@ -481,7 +489,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
   },
 
   // ── Banner ────────────────────────────────────────────────────────────────
@@ -563,7 +571,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 36,
     lineHeight: 42,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -1,
   },
@@ -577,13 +585,13 @@ const styles = StyleSheet.create({
 
   startingText: {
     fontSize: 14,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.medium,
   },
 
   price: {
     fontSize: 32,
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
@@ -598,12 +606,12 @@ const styles = StyleSheet.create({
 
   // ── Features card ─────────────────────────────────────────────────────────
   featuresCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 18,
     marginTop: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     shadowColor: '#64748B',
     shadowOpacity: 0.06,
     shadowRadius: 10,
@@ -614,7 +622,7 @@ const styles = StyleSheet.create({
   featureCardTitle: {
     fontFamily: Fonts.bold,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 14,
     letterSpacing: -0.1,
   },
@@ -642,7 +650,7 @@ const styles = StyleSheet.create({
   feature: {
     fontFamily: Fonts.medium,
     fontSize: 13,
-    color: '#0F172A',
+    color: colors.textPrimary,
     flex: 1,
   },
 
@@ -650,7 +658,7 @@ const styles = StyleSheet.create({
   optionHeading: {
     fontSize: 20,
     fontFamily: Fonts.bold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginTop: 28,
     marginBottom: 14,
     letterSpacing: -0.3,
@@ -658,12 +666,12 @@ const styles = StyleSheet.create({
 
   // ── Option cards ──────────────────────────────────────────────────────────
   optionCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     padding: 18,
     borderRadius: 22,
     marginBottom: 14,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     overflow: 'hidden',
     shadowColor: '#64748B',
     shadowOpacity: 0.06,
@@ -673,23 +681,9 @@ const styles = StyleSheet.create({
   },
 
   selectedOption: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FAFBFF',
-    shadowColor: '#2563EB',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 5,
-  },
-
-  selectedTopBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 3,
-    backgroundColor: '#2563EB',
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.selectedCardBackground,
   },
 
   optionTopRow: {
@@ -703,36 +697,28 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontFamily: Fonts.semiBold,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginRight: 10,
   },
 
   optionTitleSelected: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
-  selectedBadge: {
-    flexDirection: 'row',
+  checkBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
   },
 
-  selectedBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontFamily: Fonts.bold,
-  },
-
-  radioEmpty: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#CBD5E1',
+  checkBadgeSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
 
   optionPriceRow: {
@@ -744,19 +730,19 @@ const styles = StyleSheet.create({
 
   strikePrice: {
     textDecorationLine: 'line-through',
-    color: '#94A3B8',
+    color: colors.textHint,
     fontFamily: Fonts.regular,
     fontSize: 13,
   },
 
   optionPrice: {
-    color: '#2563EB',
+    color: colors.primary,
     fontFamily: Fonts.bold,
     fontSize: 17,
   },
 
   optionPriceSelected: {
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   savingsPill: {
@@ -787,7 +773,7 @@ const styles = StyleSheet.create({
   },
 
   optionMetaText: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 12,
     fontFamily: Fonts.medium,
   },
@@ -796,7 +782,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.divider,
   },
 
   includesItem: {
@@ -818,7 +804,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     bottom: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 26,
     flexDirection: 'row',
     alignItems: 'center',
@@ -838,7 +824,7 @@ const styles = StyleSheet.create({
   },
 
   bottomLabel: {
-    color: '#94A3B8',
+    color: colors.textHint,
     fontSize: 11,
     fontFamily: Fonts.medium,
     textTransform: 'uppercase',
@@ -848,13 +834,13 @@ const styles = StyleSheet.create({
   bottomPrice: {
     marginTop: 4,
     fontSize: 18,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.3,
   },
 
   floatingButton: {
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     height: 52,
     paddingHorizontal: 22,
     borderRadius: 18,

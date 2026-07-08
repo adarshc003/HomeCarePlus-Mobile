@@ -256,6 +256,8 @@ export default {
   manageBookingsSubtitle: 'تابع الحجوزات الحالية والقادمة والمكتملة بسهولة',
   noBookingsYet: 'لا توجد حجوزات',
   noBookingsDesc: 'ستظهر الخدمات المحجوزة هنا.',
+  couldNotLoadBookings: 'تعذّر تحميل الحجوزات',
+  couldNotLoadBookingsDesc: 'حدث خطأ ما. اسحب للأسفل للمحاولة مرة أخرى.',
   loadingBookings: 'جارٍ تحميل الحجوزات...',
   bookingsCount: 'حجز',
   bookingNumber: 'الحجز',
@@ -266,6 +268,7 @@ export default {
   partner: 'مقدم الخدمة',
   name: 'الاسم',
   phone: 'رقم الهاتف',
+  contact: 'جهة الاتصال',
   specialization: 'التخصص',
   method: 'طريقة الدفع',
   amount: 'المبلغ',
@@ -292,10 +295,12 @@ export default {
   continuePayment: 'متابعة الدفع',
   yearsExperience: 'سنوات خبرة',
   callTechnician: 'اتصال بالفني',
+  cancellationNoTechnician: 'لم يتوفر فني للفترة الزمنية التي اخترتها، لذا تم إلغاء هذا الحجز تلقائياً. يرجى اختيار فترة زمنية أخرى.',
 
 
   // ── Status badges ─────────────────────────────────────────────────────────
 statusPending: 'تم تأكيد الحجز',
+statusPendingAssignment: 'جاري البحث عن فني',
 statusAssigned: 'تم تعيين مقدم الخدمة',
 statusTravelling: 'الفني في الطريق',
 statusStarted: 'الخدمة قيد التنفيذ',

@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API = axios.create({
   baseURL: 'https://home-care-plus-app.onrender.com/api',
+  timeout: 30000,
 });
 
 API.interceptors.request.use(

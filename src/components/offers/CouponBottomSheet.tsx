@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import OfferCard from './OfferCard';
@@ -42,6 +43,9 @@ const CouponBottomSheet = ({
   const language = useLanguageStore(
     state => state.language,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const [search, setSearch] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
@@ -97,7 +101,7 @@ const CouponBottomSheet = ({
                 <Ionicons
                   name="pricetag"
                   size={16}
-                  color="#2563EB"
+                  color={colors.primary}
                 />
               </View>
               <View>
@@ -117,7 +121,7 @@ const CouponBottomSheet = ({
               <Ionicons
                 name="close"
                 size={18}
-                color="#64748B"
+                color={colors.textSecondary}
               />
             </TouchableOpacity>
           </View>
@@ -131,7 +135,7 @@ const CouponBottomSheet = ({
               <Ionicons
                 name="ticket-outline"
                 size={17}
-                color={inputFocused ? '#2563EB' : '#94A3B8'}
+                color={inputFocused ? colors.primary : colors.textHint}
               />
               <TextInput
                 value={search}
@@ -195,7 +199,7 @@ const CouponBottomSheet = ({
                   <Ionicons
                     name="search-outline"
                     size={32}
-                    color="#2563EB"
+                    color={colors.primary}
                   />
                 </View>
                 <Text style={styles.emptyTitle}>
@@ -227,7 +231,7 @@ const CouponBottomSheet = ({
 
 export default CouponBottomSheet;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   overlay: {
     flex: 1,
@@ -236,7 +240,7 @@ const styles = StyleSheet.create({
   },
 
   sheet: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 20,
@@ -249,7 +253,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 10,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: colors.border,
     alignSelf: 'center',
     marginBottom: 20,
   },
@@ -285,7 +289,7 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: Fonts.bold,
     fontSize: 18,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
 
@@ -293,7 +297,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: Fonts.regular,
     fontSize: 12,
-    color: '#64748B',
+    color: colors.textSecondary,
     lineHeight: 17,
   },
 
@@ -301,11 +305,11 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     flexShrink: 0,
   },
 
@@ -323,23 +327,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     height: 50,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     paddingHorizontal: 14,
   },
 
   inputWrapFocused: {
-    borderColor: '#2563EB',
-    backgroundColor: '#FFFFFF',
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
   },
 
   input: {
     flex: 1,
     fontFamily: Fonts.semiBold,
     fontSize: 14,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: 0.8,
     paddingVertical: 0,
   },
@@ -348,7 +352,7 @@ const styles = StyleSheet.create({
     height: 50,
     paddingHorizontal: 18,
     borderRadius: 14,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#2563EB',
@@ -382,13 +386,13 @@ const styles = StyleSheet.create({
     width: 4,
     height: 16,
     borderRadius: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   sectionTitle: {
     fontFamily: Fonts.bold,
     fontSize: 15,
-    color: '#0F172A',
+    color: colors.textPrimary,
     flex: 1,
     letterSpacing: -0.1,
   },
@@ -405,7 +409,7 @@ const styles = StyleSheet.create({
   sectionCountText: {
     fontFamily: Fonts.bold,
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   // ── List ──────────────────────────────────
@@ -432,13 +436,13 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontFamily: Fonts.semiBold,
     fontSize: 16,
-    color: '#0F172A',
+    color: colors.textPrimary,
     marginBottom: 5,
   },
 
   emptySubtitle: {
     fontFamily: Fonts.regular,
     fontSize: 13,
-    color: '#94A3B8',
+    color: colors.textHint,
   },
 });

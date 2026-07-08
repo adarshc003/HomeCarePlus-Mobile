@@ -131,6 +131,23 @@ body: {
 const store =
   useNotificationStore.getState();
 
+// FCM guarantees at-least-once delivery — it can redeliver the same push
+// to the same device, and the payload carries no unique notification ID
+// to correlate against. Treat an identical type/text/data arriving again
+// as a redelivery of the same event, not a new one.
+const isDuplicate = store.notifications.some(
+  item =>
+    item.type === notificationItem.type &&
+    item.title.en === notificationItem.title.en &&
+    item.body.en === notificationItem.body.en &&
+    JSON.stringify(item.data ?? {}) ===
+      JSON.stringify(notificationItem.data ?? {}),
+);
+
+if (isDuplicate) {
+  return;
+}
+
 store.addNotification(
   notificationItem,
 );

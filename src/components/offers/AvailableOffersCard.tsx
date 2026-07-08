@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import OfferCard from './OfferCard';
@@ -36,6 +37,9 @@ const AvailableOffersCard = ({
     useLanguageStore(
       state => state.language,
     );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   if (offers.length === 0) {
     return null;
@@ -102,10 +106,10 @@ const AvailableOffersCard = ({
 
 export default AvailableOffersCard;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 24,
     padding: 20,
     marginTop: 18,
@@ -141,13 +145,13 @@ const styles = StyleSheet.create({
     width: 4,
     height: 18,
     borderRadius: 4,
-    backgroundColor: '#2563EB',
+    backgroundColor: colors.primary,
   },
 
   title: {
     fontFamily: Fonts.bold,
     fontSize: 17,
-    color: '#0F172A',
+    color: colors.textPrimary,
     letterSpacing: -0.2,
   },
 
@@ -161,13 +165,13 @@ const styles = StyleSheet.create({
   countText: {
     fontFamily: Fonts.bold,
     fontSize: 12,
-    color: '#2563EB',
+    color: colors.primary,
   },
 
   subtitle: {
     marginTop: 5,
     fontSize: 13,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontFamily: Fonts.regular,
     lineHeight: 18,
   },
@@ -176,29 +180,29 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   viewAll: {
     fontFamily: Fonts.semiBold,
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 13,
   },
 
   viewAllArrow: {
     fontFamily: Fonts.semiBold,
-    color: '#2563EB',
+    color: colors.primary,
     fontSize: 13,
   },
 
   divider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.divider,
     marginBottom: 14,
   },
 
