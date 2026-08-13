@@ -8,6 +8,9 @@ import {
 
 import Ionicons from '@react-native-vector-icons/ionicons';
 
+import {useLanguageStore} from '../../store/languageStore';
+import {t} from '../../i18n';
+
 interface Props {
   rating: number;
   onChange: (rating: number) => void;
@@ -19,6 +22,7 @@ const StarRating = ({
   rating,
   onChange,
 }: Props) => {
+  const language = useLanguageStore(state => state.language);
 
   const scales = STARS.map(
     () => React.useRef(new Animated.Value(1)).current,
@@ -56,7 +60,10 @@ const StarRating = ({
             key={item}
             activeOpacity={0.75}
             onPress={() => handlePress(item)}
-            style={styles.starButton}>
+            style={styles.starButton}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('rateLabel', language)} ${item} ${t('starsLabel', language)}`}
+            accessibilityState={{selected: filled}}>
 
             <Animated.View
               style={{transform: [{scale: scales[item - 1]}]}}>

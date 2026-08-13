@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Platform,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
@@ -28,6 +29,7 @@ interface Props {
   onApply: (offer: any) => void;
   onApplyCoupon: (couponCode: string) => void;
   onRemove?: () => void;
+  applying?: boolean;
 }
 
 const CouponBottomSheet = ({
@@ -38,6 +40,7 @@ const CouponBottomSheet = ({
   onApply,
   onApplyCoupon,
   onRemove,
+  applying = false,
 }: Props) => {
 
   const language = useLanguageStore(
@@ -163,14 +166,18 @@ const CouponBottomSheet = ({
             <TouchableOpacity
               style={[
                 styles.applyBtn,
-                !search.trim() && styles.applyBtnDisabled,
+                (!search.trim() || applying) && styles.applyBtnDisabled,
               ]}
-              disabled={!search.trim()}
+              disabled={!search.trim() || applying}
               activeOpacity={0.85}
               onPress={() => onApplyCoupon(search.trim())}>
-              <Text style={styles.applyBtnText}>
-                {t('apply', language)}
-              </Text>
+              {applying ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={styles.applyBtnText}>
+                  {t('apply', language)}
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
 
@@ -217,6 +224,7 @@ const CouponBottomSheet = ({
                 onRemove={onRemove}
                 applied={selectedOffer?._id === item._id}
                 isLast={index === filteredOffers.length - 1}
+                applying={applying}
               />
             )}
           />

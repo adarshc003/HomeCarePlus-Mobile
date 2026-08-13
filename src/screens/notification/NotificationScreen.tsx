@@ -1,4 +1,4 @@
-import React, {useRef} from 'react';
+import React from 'react';
 
 import {
   FlatList,
@@ -7,6 +7,7 @@ import {
   View,
   RefreshControl,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 
 import {
@@ -32,6 +33,7 @@ import {useTheme} from '../../hooks/useTheme';
 import {t} from '../../i18n';
 
 import NotificationCard from '../../components/common/NotificationCard';
+import NotificationCardSkeleton from '../../components/common/NotificationCardSkeleton';
 
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 
@@ -40,6 +42,8 @@ import {
 } from '../../services/notificationApi';
 
 import Icon from '@react-native-vector-icons/ionicons';
+
+const SKELETON_COUNT = 8;
 
 const NotificationScreen = () => {
   const language =
@@ -52,39 +56,64 @@ const NotificationScreen = () => {
   const {colors} = useTheme();
   const styles = createStyles(colors);
 
-  const {
-    notifications,
-    setNotifications,
-    loading,
-    refreshing,
-    setLoading,
-    setRefreshing,
-    markAllRead,
-  } =
-    useNotificationStore();
+  const notifications = useNotificationStore(
+    state => state.notifications,
+  );
+  const setNotifications = useNotificationStore(
+    state => state.setNotifications,
+  );
+  const loading = useNotificationStore(
+    state => state.loading,
+  );
+  const refreshing = useNotificationStore(
+    state => state.refreshing,
+  );
+  const setLoading = useNotificationStore(
+    state => state.setLoading,
+  );
+  const setRefreshing = useNotificationStore(
+    state => state.setRefreshing,
+  );
+  const markAllRead = useNotificationStore(
+    state => state.markAllRead,
+  );
 
-  // Bumped whenever a local mutation (mark-all-read) commits, so a fetch
-  // that was already in flight before that mutation can detect it's now
-  // stale and skip overwriting the corrected state when it finally resolves.
-  const stateVersionRef = useRef(0);
+  // Distinguishes "the request failed" from "there are genuinely no
+  // notifications" — EmptyState previously showed the same "all caught up"
+  // message either way, with the fetch error only ever reaching a
+  // console.log.
+  const [loadError, setLoadError] =
+    React.useState(false);
 
   const loadNotifications =
     async () => {
-      const requestVersion = stateVersionRef.current;
+      // Captured from the store (not a local ref) so that ANY mutation —
+      // mark-all-read here, or an individual NotificationCard tap's
+      // markRead() — invalidates a fetch that was already in flight
+      // before it. Without this, a slower earlier GET /notifications can
+      // resolve after the mutation and silently overwrite the
+      // just-corrected read state with stale (pre-mutation) data.
+      const requestVersion =
+        useNotificationStore.getState().mutationVersion;
 
       try {
         setLoading(true);
+        setLoadError(false);
 
         const response =
           await getNotifications();
 
-        if (requestVersion === stateVersionRef.current) {
+        if (
+          requestVersion ===
+          useNotificationStore.getState().mutationVersion
+        ) {
           setNotifications(
             response.data.notifications,
           );
         }
       } catch (error) {
         console.log(error);
+        setLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -105,15 +134,32 @@ const NotificationScreen = () => {
     }, []),
   );
 
+  const showSkeleton = loading && notifications.length === 0;
+
+  // Fades the real list in the first time it replaces the skeleton. Starts
+  // already-opaque when there's cached data, so a warm revisit never plays
+  // an unnecessary fade — mirrors MyBookingsScreen's identical pattern.
+  const contentOpacity = React.useRef(
+    new Animated.Value(notifications.length > 0 ? 1 : 0),
+  ).current;
+
+  React.useEffect(() => {
+    if (!showSkeleton) {
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [showSkeleton, contentOpacity]);
+
   const onMarkAllRead =
     async () => {
       try {
         await markAllNotificationsRead();
 
-        // Invalidate any load that started before this point — if it
-        // resolves after this, it's carrying pre-mark-all-read data.
-        stateVersionRef.current += 1;
-
+        // markAllRead() itself bumps the store's mutationVersion, which
+        // invalidates any fetch already in flight before this point.
         markAllRead();
       } catch (error) {
         console.log(error);
@@ -127,17 +173,36 @@ const NotificationScreen = () => {
     <View style={styles.empty}>
       <View style={styles.emptyIconWrap}>
         <Icon
-          name="notifications-off-outline"
+          name={
+            loadError
+              ? 'cloud-offline-outline'
+              : 'notifications-off-outline'
+          }
           size={48}
           color="#4757E7"
         />
       </View>
       <Text style={styles.emptyTitle}>
-        {t('allCaughtUp', language)}
+        {loadError
+          ? t('failedToLoadNotifications', language)
+          : t('allCaughtUp', language)}
       </Text>
       <Text style={styles.emptySubtitle}>
-        {t('notificationsWillAppear', language)}
+        {loadError
+          ? ''
+          : t('notificationsWillAppear', language)}
       </Text>
+      {loadError && (
+        <TouchableOpacity
+          style={styles.retryBtn}
+          activeOpacity={0.85}
+          onPress={() => loadNotifications()}>
+          <Icon name="refresh-outline" size={14} color="#FFFFFF" />
+          <Text style={styles.retryBtnText}>
+            {t('retry', language)}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -198,36 +263,44 @@ const NotificationScreen = () => {
       {/* Divider */}
       <View style={styles.divider} />
 
-      <FlatList
-        data={notifications}
-        keyExtractor={item =>
-          item._id ??
-          item.id ??
-          String(item.createdAt ?? Date.now())
-        }
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#4757E7"
-            colors={['#4757E7']}
+      {showSkeleton ? (
+        <View style={styles.listContent}>
+          {Array.from({length: SKELETON_COUNT}).map((_, index) => (
+            <NotificationCardSkeleton key={index} />
+          ))}
+        </View>
+      ) : (
+        <Animated.View style={{flex: 1, opacity: contentOpacity}}>
+          <FlatList
+            data={notifications}
+            keyExtractor={item =>
+              item._id ??
+              item.id ??
+              String(item.createdAt ?? Date.now())
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#4757E7"
+                colors={['#4757E7']}
+              />
+            }
+            renderItem={({item}) => (
+              <NotificationCard
+                item={item}
+              />
+            )}
+            contentContainerStyle={
+              notifications.length === 0
+                ? styles.listEmpty
+                : styles.listContent
+            }
+            ListEmptyComponent={<EmptyState />}
+            showsVerticalScrollIndicator={false}
           />
-        }
-        renderItem={({item}) => (
-          <NotificationCard
-            item={item}
-          />
-        )}
-        contentContainerStyle={
-          notifications.length === 0
-            ? styles.listEmpty
-            : styles.listContent
-        }
-        ListEmptyComponent={
-          !loading ? <EmptyState /> : null
-        }
-        showsVerticalScrollIndicator={false}
-      />
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 };
@@ -348,5 +421,22 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 16,
+  },
+
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
   },
 });

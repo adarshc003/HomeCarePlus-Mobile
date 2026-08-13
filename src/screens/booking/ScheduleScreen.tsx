@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 
 import {
   View,
@@ -23,6 +23,13 @@ import {useTheme} from '../../hooks/useTheme';
 import {getLocalizedText} from '../../utils/getLocalizedText';
 
 import Ionicons from '@react-native-vector-icons/ionicons';
+
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
+import {
+  getRiyadhDateStrings,
+  isRiyadhSlotDisabled,
+} from '../../utils/riyadhTime';
 
 const timeSlots = [
   {
@@ -84,11 +91,18 @@ const bookingSlot =
     state => state.selectedTimeSlot,
   );
 
+// Never seed straight from the store's value — if a previous booking was
+// abandoned without clearBooking() ever running (e.g. logging out from
+// Profile instead of backing out through Service Details — see
+// authStore.logout()), a stale date/time from a DIFFERENT session could
+// otherwise silently pre-select here. Only applied below once validated
+// against the freshly generated 7-day window (same pattern already used
+// in AddOnScreen/ServiceDetailsScreen for their own restored selections).
 const [selectedDate, setDate] =
-  useState(bookingDate);
+  useState('');
 
 const [selectedSlot, setSlot] =
-  useState(bookingSlot);
+  useState('');
   const [error, setError] = useState('');
 
   const isLoggedIn = useAuthStore(
@@ -101,6 +115,7 @@ const [selectedSlot, setSlot] =
 
   const {colors} = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const saveDate = useBookingStore(
     state => state.setSelectedDate,
@@ -118,25 +133,22 @@ const [selectedSlot, setSlot] =
     state => state.selectedPackage,
   );
 
-  const dates = Array.from({length: 7}, (_, i) => {
-    const d = new Date();
+  // Riyadh-anchored regardless of the device's own timezone — this app is
+  // Saudi-only, so "today"/"tomorrow" and the 7-day strip must reflect the
+  // Asia/Riyadh calendar day, not whatever day it is on the device's clock.
+  const riyadhDateStrings = getRiyadhDateStrings(7);
 
-    d.setDate(d.getDate() + i);
+  const dates = riyadhDateStrings.map((value, i) => {
+    const [year, month, day] = value.split('-').map(Number);
+    // A UTC-midnight Date built directly from the Riyadh calendar date —
+    // only ever read back via getUTC*/timeZone:'UTC' below, so it never
+    // gets reinterpreted through the device's local timezone.
+    const d = new Date(Date.UTC(year, month - 1, day));
 
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-
-const displayDate =
-  d.toLocaleDateString(
-    language === 'ar'
-      ? 'ar-SA'
-      : 'en-US',
-    {
-      day: 'numeric',
-      month: 'short',
-    },
-  );
+    const displayDate = d.toLocaleDateString(
+      language === 'ar' ? 'ar-SA' : 'en-US',
+      {day: 'numeric', month: 'short', timeZone: 'UTC'},
+    );
 
     return {
       label:
@@ -146,34 +158,52 @@ const displayDate =
           ? t('tomorrow', language)
           : displayDate,
 
-      dayName:
-  DAY_NAMES[language][
-    d.getDay()
-  ],
+      dayName: DAY_NAMES[language][d.getUTCDay()],
 
       displayDate,
 
-      dayNum: d.getDate(),
+      dayNum: d.getUTCDate(),
 
-      value: `${year}-${month}-${day}`,
+      value,
     };
   });
+
+  useEffect(() => {
+    if (!bookingDate || !bookingSlot) {
+      return;
+    }
+
+    const matchesKnownDate = dates.some(
+      d => d.value === bookingDate,
+    );
+
+    const matchedSlot = timeSlots.find(
+      slot => slot.label === bookingSlot,
+    );
+
+    if (!matchesKnownDate || !matchedSlot) {
+      return;
+    }
+
+    if (isRiyadhSlotDisabled(bookingDate, matchedSlot.startHour)) {
+      return;
+    }
+
+    setDate(bookingDate);
+    setSlot(bookingSlot);
+    // Intentionally runs once on mount — dates/timeSlots reflect "now" at
+    // that point, which is exactly what this validation needs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const isSlotDisabled = (slotHour: number) => {
     if (!selectedDate) {
       return false;
     }
 
-    const today = new Date();
-    const selected = new Date(selectedDate);
-    const isToday =
-      selected.toDateString() === today.toDateString();
-
-    if (!isToday) {
-      return false;
-    }
-
-    return slotHour <= today.getHours();
+    // Riyadh-anchored — "today" and "current hour" must always mean the
+    // Asia/Riyadh calendar day/hour, not the device's own local clock.
+    return isRiyadhSlotDisabled(selectedDate, slotHour);
   };
 
   const handleContinue = () => {
@@ -428,7 +458,7 @@ onPress={() => {
       </ScrollView>
 
       {/* ── Sticky Footer ── */}
-      <View style={styles.stickyFooter}>
+      <View style={[styles.stickyFooter, {bottom: 24 + insets.bottom}]}>
 
         <View style={styles.footerLeft}>
           <Text style={styles.footerLabel}>

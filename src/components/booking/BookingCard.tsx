@@ -67,6 +67,7 @@ const serviceName =
           📅{' '}
           {new Date(booking.bookingDate).toLocaleDateString(
   language === 'ar' ? 'ar-SA' : 'en-US',
+  {timeZone: 'Asia/Riyadh'},
 )}
         </Text>
 

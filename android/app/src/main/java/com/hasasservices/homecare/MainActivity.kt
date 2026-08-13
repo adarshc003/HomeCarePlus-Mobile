@@ -1,4 +1,4 @@
-package com.homecareplus
+package com.hasasservices.homecare
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate

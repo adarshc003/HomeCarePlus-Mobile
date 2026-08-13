@@ -54,6 +54,8 @@ import {
   deleteNotification,
 } from '../../services/notificationApi';
 
+import {showError} from '../../utils/showToast';
+
 
 
 interface Props {
@@ -98,6 +100,8 @@ const NotificationCard = ({
     useLanguageStore(
       state => state.language,
     );
+
+  const isRTL = language === 'ar';
 
   const navigation =
     useNavigation<
@@ -150,6 +154,8 @@ const NotificationCard = ({
       state => state.removeNotification,
     );
 
+  const swipeableRef = useRef<Swipeable>(null);
+
   const onDelete =
     async () => {
       try {
@@ -165,6 +171,17 @@ const NotificationCard = ({
         removeNotification(id);
       } catch (error) {
         console.log(error);
+
+        // The card was never removed from the list (correct — the delete
+        // genuinely failed), but the swipe had already revealed the red
+        // trash panel with nothing telling the user it didn't work — snap
+        // it back closed and surface why.
+        swipeableRef.current?.close();
+
+        showError(
+          t('unableToDeleteNotification', language) ||
+            'Unable to delete notification.',
+        );
       }
     };
 
@@ -185,6 +202,7 @@ const NotificationCard = ({
 
   return (
     <Swipeable
+      ref={swipeableRef}
       renderRightActions={RightAction}
       onSwipeableOpen={onDelete}
       overshootRight={false}>
@@ -193,11 +211,29 @@ const NotificationCard = ({
         <Pressable
           style={[
             styles.card,
+            isRTL && styles.cardRTL,
             !item.isRead && styles.cardUnread,
           ]}
           android_ripple={{
             color: '#EEF2FF',
             borderless: false,
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`${title}. ${body}`}
+          accessibilityState={{selected: !item.isRead}}
+          // Deleting today only happens via the swipe-to-reveal gesture
+          // (onSwipeableOpen below), which assistive tech (TalkBack/
+          // VoiceOver) generally can't perform. accessibilityActions
+          // exposes the same onDelete as a discrete action in the screen
+          // reader's actions menu, with no change to the swipe gesture
+          // itself.
+          accessibilityActions={[
+            {name: 'delete', label: t('delete', language)},
+          ]}
+          onAccessibilityAction={event => {
+            if (event.nativeEvent.actionName === 'delete') {
+              onDelete();
+            }
           }}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
@@ -211,14 +247,27 @@ const NotificationCard = ({
                   return;
                 }
 
-                markRead(notificationId);
-
+                // Awaiting the backend confirmation BEFORE applying the
+                // local mutation (matching onMarkAllRead's ordering in
+                // NotificationScreen.tsx) — applying it first, as before,
+                // left a window where a list reload landing in between
+                // (the mutationVersion guard only protects a fetch that
+                // was ALREADY in flight before this point) would still see
+                // this notification as unread server-side and silently
+                // revert it back. A failure now also actually surfaces to
+                // the user instead of leaving local/server state diverged
+                // with no indication anything went wrong.
                 try {
                   await markNotificationRead(
                     notificationId,
                   );
+
+                  markRead(notificationId);
                 } catch (error) {
                   console.log(error);
+                  showError(
+                    t('unableToMarkAsRead', language),
+                  );
                 }
               }
 
@@ -257,7 +306,12 @@ const NotificationCard = ({
 
           {/* Unread accent bar */}
           {!item.isRead && (
-            <View style={styles.unreadBar} />
+            <View
+              style={[
+                styles.unreadBar,
+                isRTL && styles.unreadBarRTL,
+              ]}
+            />
           )}
 
           <View
@@ -330,18 +384,27 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
       height: 4,
     },
     elevation: 3,
+    // Kept constant (never 0) so cardUnread only ever changes borderColor,
+    // never borderWidth. Toggling borderWidth on/off is what still caused
+    // the Android "black box" artifact even after elevation was equalized —
+    // Android rebuilds the View's background drawable when a border is
+    // added where none existed, and elevation's shadow outline is derived
+    // from that same drawable.
+    borderWidth: 1,
+    borderColor: 'transparent',
   },
 
   cardUnread: {
     backgroundColor: colors.selectedCardBackground,
-    borderWidth: 1,
     borderColor: `${colors.primary}26`,
     shadowOpacity: 0.1,
-    // Same value as `card`'s elevation — changing elevation together with
-    // backgroundColor on the same Android View mid-list is what caused the
-    // "black box" rendering artifact (same root cause diagnosed earlier
-    // for the selected-card elevation bug elsewhere in this app).
     elevation: 3,
+  },
+
+  cardRTL: {
+    flexDirection: 'row-reverse',
+    paddingRight: 16,
+    paddingLeft: 14,
   },
 
   unreadBar: {
@@ -352,6 +415,11 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     width: 3,
     borderRadius: 4,
     backgroundColor: '#4757E7',
+  },
+
+  unreadBarRTL: {
+    left: undefined,
+    right: 0,
   },
 
   iconContainer: {

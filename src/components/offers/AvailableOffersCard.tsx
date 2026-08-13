@@ -23,6 +23,8 @@ interface Props {
   onRemove?: () => void;
 
   selectedOffer?: any;
+
+  applying?: boolean;
 }
 
 const AvailableOffersCard = ({
@@ -31,6 +33,7 @@ const AvailableOffersCard = ({
   onApply,
   onRemove,
   selectedOffer,
+  applying = false,
 }: Props) => {
 
   const language =
@@ -97,6 +100,7 @@ const AvailableOffersCard = ({
               offer._id
             }
             isLast={index === Math.min(offers.length, 2) - 1}
+            applying={applying}
           />
         ))}
 

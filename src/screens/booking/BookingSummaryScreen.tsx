@@ -9,8 +9,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
+
+import {showDialog} from '../../components/dialog/FeedbackDialog';
 
 import {useBookingStore}
 from '../../store/bookingStore';
@@ -53,6 +54,8 @@ from '../../components/offers/CouponBottomSheet';
 import PriceSummaryCard
 from '../../components/offers/PriceSummaryCard';
 
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
 
 const BookingSummaryScreen = ({
   navigation,
@@ -65,6 +68,12 @@ const BookingSummaryScreen = ({
     setOfferModalVisible,
   ] = useState(false);
 
+  // Guards handleApplyOffer/handleApplyCoupon against a rapid double-tap
+  // firing two concurrent applyOffer() requests (no visual feedback
+  // previously existed while the request was in flight, making a second
+  // tap likely on a slow connection).
+  const [isApplyingOffer, setIsApplyingOffer] = useState(false);
+
   const language =
     useLanguageStore(
       state => state.language,
@@ -72,6 +81,7 @@ const BookingSummaryScreen = ({
 
   const {colors} = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const cachedOffers =
     useAppDataStore(
@@ -93,17 +103,33 @@ const BookingSummaryScreen = ({
       state => state.setOffersLoading,
     );
 
-  const {
-    availableOffers,
-    selectedOffer,
-    originalAmount,
-    discountAmount,
-    finalAmount,
-    setAvailableOffers,
-    selectOffer,
-    setPriceSummary,
-    clearOffer,
-  } = useOfferStore();
+  const availableOffers = useOfferStore(
+    state => state.availableOffers,
+  );
+  const selectedOffer = useOfferStore(
+    state => state.selectedOffer,
+  );
+  const originalAmount = useOfferStore(
+    state => state.originalAmount,
+  );
+  const discountAmount = useOfferStore(
+    state => state.discountAmount,
+  );
+  const finalAmount = useOfferStore(
+    state => state.finalAmount,
+  );
+  const setAvailableOffers = useOfferStore(
+    state => state.setAvailableOffers,
+  );
+  const selectOffer = useOfferStore(
+    state => state.selectOffer,
+  );
+  const setPriceSummary = useOfferStore(
+    state => state.setPriceSummary,
+  );
+  const clearOffer = useOfferStore(
+    state => state.clearOffer,
+  );
 
   const selectedService =
     useBookingStore(
@@ -185,11 +211,13 @@ const BookingSummaryScreen = ({
   };
 
   const handleApplyOffer = async (offer: any) => {
-    if (!selectedService) {
+    if (!selectedService || isApplyingOffer) {
       return;
     }
 
     try {
+      setIsApplyingOffer(true);
+
       const response = await applyOffer({
         offerId: offer._id,
         serviceId: selectedService.id,
@@ -206,20 +234,26 @@ const BookingSummaryScreen = ({
 
       setOfferModalVisible(false);
     } catch (error: any) {
-      Alert.alert(
-        t('coupon', language),
-        error?.response?.data?.message ||
+      showDialog({
+        variant: 'error',
+        title: t('coupon', language),
+        description:
+          error?.response?.data?.message ||
           t('unableToApplyCoupon', language),
-      );
+      });
+    } finally {
+      setIsApplyingOffer(false);
     }
   };
 
   const handleApplyCoupon = async (couponCode: string) => {
-    if (!couponCode.trim() || !selectedService) {
+    if (!couponCode.trim() || !selectedService || isApplyingOffer) {
       return;
     }
 
     try {
+      setIsApplyingOffer(true);
+
       const response = await applyOffer({
         couponCode,
         serviceId: selectedService.id,
@@ -236,11 +270,15 @@ const BookingSummaryScreen = ({
 
       setOfferModalVisible(false);
     } catch (error: any) {
-      Alert.alert(
-        t('coupon', language),
-        error?.response?.data?.message ||
+      showDialog({
+        variant: 'error',
+        title: t('coupon', language),
+        description:
+          error?.response?.data?.message ||
           t('unableToApplyCoupon', language),
-      );
+      });
+    } finally {
+      setIsApplyingOffer(false);
     }
   };
 
@@ -394,6 +432,7 @@ const BookingSummaryScreen = ({
           onViewAll={() => setOfferModalVisible(true)}
           onApply={handleApplyOffer}
           onRemove={handleRemoveCoupon}
+          applying={isApplyingOffer}
         />
 
         <PriceSummaryCard
@@ -409,7 +448,7 @@ const BookingSummaryScreen = ({
 
       </ScrollView>
 
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, {bottom: 23 + insets.bottom}]}>
         <TouchableOpacity
           style={styles.button}
           onPress={handleConfirmBooking}
@@ -428,6 +467,7 @@ const BookingSummaryScreen = ({
         onApply={handleApplyOffer}
         onApplyCoupon={handleApplyCoupon}
         onRemove={handleRemoveCoupon}
+        applying={isApplyingOffer}
       />
 
     </View>

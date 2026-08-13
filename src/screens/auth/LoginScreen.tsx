@@ -11,9 +11,12 @@ import {
   StyleSheet,
   Animated,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 
 import {sendOTP} from '../../services/firebaseAuth';
+import {resolveOtpErrorKey} from '../../utils/authErrors';
 import {
   showSuccess,
   showError,
@@ -106,9 +109,14 @@ const LoginScreen = ({
     } catch (error: any) {
       console.log(error);
 
-      setError(error?.message || t('failedToSendOtp', language));
+      const errorKey = resolveOtpErrorKey(error);
+      const message = errorKey
+        ? t(errorKey, language)
+        : error?.message || t('failedToSendOtp', language);
 
-      showError(t('failed', language), t('unableToSendOtp', language));
+      setError(message);
+
+      showError(t('failed', language), message);
     } finally {
       setLoading(false);
     }
@@ -117,7 +125,9 @@ const LoginScreen = ({
   const isValid = isValidPhoneForCountry(phone, country);
 
   return (
-    <View style={styles.overlay}>
+    <KeyboardAvoidingView
+      style={styles.overlay}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.sheet}>
 
         {/* ── Drag handle ── */}
@@ -126,8 +136,12 @@ const LoginScreen = ({
         {/* ── Header ── */}
         <View style={styles.headerRow}>
           <TouchableOpacity
-            style={styles.backButton}
+            style={[
+              styles.backButton,
+              loading && styles.backButtonDisabled,
+            ]}
             activeOpacity={0.7}
+            disabled={loading}
             onPress={() => navigation.goBack()}>
             <Ionicons
               name={
@@ -266,7 +280,7 @@ const LoginScreen = ({
         </Modal>
 
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -320,6 +334,10 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     borderColor: colors.border,
     flexShrink: 0,
     marginTop: 2,
+  },
+
+  backButtonDisabled: {
+    opacity: 0.45,
   },
 
   headerTextBlock: {

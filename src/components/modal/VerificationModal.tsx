@@ -11,8 +11,9 @@ import {
   TouchableOpacity,
   TextInput,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
+
+import {showDialog} from '../dialog/FeedbackDialog';
 
 import QRCode from 'react-native-qrcode-svg';
 
@@ -77,11 +78,13 @@ const VerificationModal = ({
     } catch (error: any) {
       console.log(error);
 
-      Alert.alert(
-        t('serviceVerification', language),
-        error?.response?.data?.message ||
+      showDialog({
+        variant: 'error',
+        title: t('serviceVerification', language),
+        description:
+          error?.response?.data?.message ||
           t('unableToSubmitReview', language),
-      );
+      });
     } finally {
       setSubmitting(false);
     }
@@ -91,6 +94,19 @@ const VerificationModal = ({
   const [review, setReview] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+
+  // This modal is mounted once inside BookingDetailsScreen and only its
+  // `visible` prop toggles — React Navigation reuses the same screen
+  // instance when navigating here again for a different booking, so
+  // without this, a draft rating/review typed for one booking (and never
+  // submitted) would still be showing the next time this modal opens for
+  // a completely different booking.
+  useEffect(() => {
+    setRating(0);
+    setReview('');
+    setSubmitting(false);
+    setSubmitted(false);
+  }, [bookingId]);
 
   return (
     <Modal

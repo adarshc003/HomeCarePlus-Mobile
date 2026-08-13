@@ -13,6 +13,7 @@ import {useNotificationStore} from '../../store/notificationStore';
 import {useLanguageStore} from '../../store/languageStore';
 import {useTheme} from '../../hooks/useTheme';
 import {Fonts} from '../../constants/fonts';
+import {navigateToBookingFromPush} from '../../services/notificationService';
 
 const TYPE_CONFIG: Record<
   string,
@@ -26,11 +27,15 @@ const TYPE_CONFIG: Record<
 };
 
 const NotificationBanner = () => {
-  const {
-    bannerVisible,
-    currentNotification,
-    hideBanner,
-  } = useNotificationStore();
+  const bannerVisible = useNotificationStore(
+    state => state.bannerVisible,
+  );
+  const currentNotification = useNotificationStore(
+    state => state.currentNotification,
+  );
+  const hideBanner = useNotificationStore(
+    state => state.hideBanner,
+  );
 
   const language =
     useLanguageStore(state => state.language);
@@ -67,7 +72,11 @@ const NotificationBanner = () => {
       }),
     ]).start();
 
-    // Progress bar animation
+    // Progress bar animation — reset first so a notification arriving
+    // while one is already showing restarts a full countdown instead of
+    // inheriting whatever progress the previous one had made.
+    scaleX.setValue(0);
+
     Animated.timing(scaleX, {
       toValue: 1,
       duration: 5000,
@@ -79,7 +88,11 @@ const NotificationBanner = () => {
     }, 5000);
 
     return () => clearTimeout(timer);
-  }, [bannerVisible]);
+    // currentNotification is included so a second notification arriving
+    // while bannerVisible is already true (bannerVisible itself never
+    // changes in that case) still restarts this timer/animation instead
+    // of being cut short by the FIRST notification's already-running timer.
+  }, [bannerVisible, currentNotification]);
 
   const closeBanner = () => {
     Animated.parallel([
@@ -122,7 +135,20 @@ const NotificationBanner = () => {
       ]}>
       <Pressable
         style={styles.card}
-        onPress={closeBanner}>
+        onPress={() => {
+          // Previously only dismissed — background/terminated notification
+          // taps already navigate to the booking via
+          // navigateToBookingFromPush(), but a foreground tap on this
+          // banner never did, an inconsistency across the three
+          // notification-handling paths.
+          const bookingId = currentNotification.data?.bookingId;
+
+          closeBanner();
+
+          if (bookingId) {
+            navigateToBookingFromPush(String(bookingId));
+          }
+        }}>
 
         {/* Icon */}
         <View style={[styles.iconWrap, {backgroundColor: bg}]}>

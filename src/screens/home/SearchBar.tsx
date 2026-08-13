@@ -4,7 +4,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  I18nManager,
 } from 'react-native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import { useServiceStore } from '../../store/serviceStore';
@@ -23,18 +22,25 @@ const SearchBar = ({
     state => state.searchServices,
   );
   const language = useLanguageStore(state => state.language);
+  // The app's own language toggle drives RTL, not the device's system
+  // locale — I18nManager.isRTL reflects the latter and stays false here
+  // since the app never calls I18nManager.forceRTL(), which left Arabic
+  // text always left-aligned regardless of the in-app language. Same
+  // isRTL-from-language-store pattern already used in FeedbackDialog.tsx /
+  // HeroSection.tsx / NotificationCardSkeleton.tsx.
+  const isRTL = language === 'ar';
 
   const {colors} = useTheme();
   const styles = createStyles(colors);
 
   return (
     <View style={styles.wrapper}>
-      <View style={styles.container}>
+      <View style={[styles.container, isRTL && styles.containerRTL]}>
         <Ionicons
           name="search"
           size={22}
           color={colors.textSecondary}
-          style={styles.searchIcon}
+          style={[styles.searchIcon, isRTL && styles.searchIconRTL]}
         />
 
         <TextInput
@@ -44,7 +50,7 @@ const SearchBar = ({
           placeholderTextColor={colors.textHint}
           style={styles.input}
           returnKeyType="search"
-          textAlign={I18nManager.isRTL ? 'right' : 'left'}
+          textAlign={isRTL ? 'right' : 'left'}
           onChangeText={text => {
             setSearchText(text);
             searchServices(text);
@@ -97,8 +103,15 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     },
     elevation: 4,
   },
+  containerRTL: {
+    flexDirection: 'row-reverse',
+  },
   searchIcon: {
     marginRight: 12,
+  },
+  searchIconRTL: {
+    marginRight: 0,
+    marginLeft: 12,
   },
   input: {
     flex: 1,

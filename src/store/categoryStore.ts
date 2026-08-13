@@ -28,6 +28,11 @@ interface CategoryState {
 
   loading: boolean;
 
+  // Distinguishes "the request failed" from "the list is genuinely empty" —
+  // without this, CategorySection had no way to tell the two apart and
+  // silently rendered as if there were simply no categories.
+  error: boolean;
+
   loadCategories:
     () => Promise<void>;
 }
@@ -40,11 +45,14 @@ export const
 
         loading: false,
 
+        error: false,
+
         loadCategories:
           async () => {
             try {
               set({
                 loading: true,
+                error: false,
               });
 
               const data =
@@ -61,6 +69,10 @@ export const
               console.log(
                 error,
               );
+
+              set({
+                error: true,
+              });
             } finally {
               set({
                 loading: false,

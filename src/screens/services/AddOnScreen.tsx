@@ -32,18 +32,43 @@ import {getEligibleOffers} from '../../services/offerService';
 
 import {useOfferStore} from '../../store/offerStore';
 
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
 const AddOnScreen = ({navigation}: any) => {
 
   const [addOns, setAddOns] = useState<any[]>([]);
+
+  // Distinguishes "the request failed" from "this service genuinely has
+  // no add-ons" — loadAddOns()'s catch previously only logged the error,
+  // so a failed fetch rendered identically to a real empty list (no
+  // ListEmptyComponent existed at all).
+  const [addOnsLoading, setAddOnsLoading] = useState(true);
+  const [addOnsError, setAddOnsError] = useState(false);
   const bookingSelectedAddOns =
   useBookingStore(
     state => state.selectedAddOns,
   );
 
+// Never seed from the store's value directly — if the customer abandoned
+// a DIFFERENT service's booking without it being cleared, this would
+// silently carry that unrelated add-on (and its price) into this one.
 const [selectedAddOns, setSelectedAddOns] =
-  useState<any[]>(
-    bookingSelectedAddOns,
+  useState<any[]>([]);
+
+// Restores a previous selection only for add-ons that actually belong to
+// THIS service's own list — a leftover selection from an abandoned,
+// different booking is dropped rather than carried forward.
+useEffect(() => {
+  if (addOns.length === 0) {
+    return;
+  }
+
+  const validSelections = bookingSelectedAddOns.filter(item =>
+    addOns.some(addOn => addOn.id === item.id),
   );
+
+  setSelectedAddOns(validSelections);
+}, [addOns]);
 
   const selectedService = useBookingStore(
     state => state.selectedService,
@@ -83,10 +108,12 @@ const setOffersLoading = useAppDataStore(
 
   const {colors} = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (cachedAddOns && cachedAddOns.length > 0) {
       setAddOns(cachedAddOns);
+      setAddOnsLoading(false);
       return;
     }
 
@@ -99,10 +126,16 @@ const setOffersLoading = useAppDataStore(
         return;
       }
 
+      setAddOnsLoading(true);
+      setAddOnsError(false);
+
       const data = await getAddOns(selectedService.id);
       setAddOns(data.addOns || []);
     } catch (error) {
       console.log(error);
+      setAddOnsError(true);
+    } finally {
+      setAddOnsLoading(false);
     }
   };
 
@@ -166,6 +199,42 @@ const handleContinue = () => {
         contentContainerStyle={styles.listContent}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
+
+        ListEmptyComponent={
+          addOnsLoading ? null : (
+            <View style={styles.addOnsEmptyContainer}>
+              <Ionicons
+                name={
+                  addOnsError
+                    ? 'cloud-offline-outline'
+                    : 'add-circle-outline'
+                }
+                size={36}
+                color={colors.primary}
+              />
+              <Text style={styles.addOnsEmptyText}>
+                {addOnsError
+                  ? t('failedToLoadAddOns', language)
+                  : t('noAddOns', language)}
+              </Text>
+              {addOnsError && (
+                <TouchableOpacity
+                  style={styles.addOnsRetryBtn}
+                  activeOpacity={0.85}
+                  onPress={() => loadAddOns()}>
+                  <Ionicons
+                    name="refresh-outline"
+                    size={14}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.addOnsRetryBtnText}>
+                    {t('retry', language)}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )
+        }
 
         // ── List header ──────────────────────────────────────────────────────
         ListHeaderComponent={
@@ -362,7 +431,7 @@ const handleContinue = () => {
       />
 
       {/* ── Sticky footer ── */}
-      <View style={styles.stickyFooter}>
+      <View style={[styles.stickyFooter, {bottom: 24 + insets.bottom}]}>
 
         <View style={styles.footerLeft}>
           <Text style={styles.footerLabel}>
@@ -789,5 +858,35 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
 
   footerButtonIcon: {
     marginLeft: 6,
+  },
+
+  addOnsEmptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    gap: 10,
+  },
+
+  addOnsEmptyText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    textAlign: 'center',
+  },
+
+  addOnsRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+
+  addOnsRetryBtnText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
   },
 });

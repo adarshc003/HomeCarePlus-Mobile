@@ -9,9 +9,14 @@ import {
   UIManager,
   StatusBar,
   Animated,
+  Linking,
 } from 'react-native';
 
 import {useFocusEffect} from '@react-navigation/native';
+
+import {InAppBrowser} from 'react-native-inappbrowser-reborn';
+
+import {LEGAL_DOCUMENT_URLS} from '../../constants/legalDocuments';
 
 import {useAuthStore} from '../../store/authStore';
 import {unregisterCurrentToken} from '../../services/notificationService';
@@ -20,9 +25,9 @@ import {useLanguageStore} from '../../store/languageStore';
 import {useThemeStore, ThemeMode} from '../../store/themeStore';
 import {useTheme} from '../../hooks/useTheme';
 import {t} from '../../i18n';
-
 import {Fonts} from '../../constants/fonts';
 import Ionicons from '@react-native-vector-icons/ionicons';
+import AboutAppModal from '../../components/modal/AboutAppModal';
 
 if (
   Platform.OS === 'android' &&
@@ -89,6 +94,7 @@ const ProfileScreen = ({navigation}: any) => {
   const [activeSection, setActiveSection] = useState<SubSection>(null);
   const [pendingTheme, setPendingTheme] = useState<ThemeMode>(themeMode);
   const [pendingLanguage, setPendingLanguage] = useState(language);
+  const [aboutAppVisible, setAboutAppVisible] = useState(false);
 
   const animate = () =>
     LayoutAnimation.configureNext(
@@ -149,6 +155,17 @@ const ProfileScreen = ({navigation}: any) => {
       const refreshProfile = async () => {
         try {
           const response = await getProfile();
+
+          // handleLogout() can complete while this request is still in
+          // flight (it clears session state without cancelling this call).
+          // Re-checking against the store directly — not the isLoggedIn
+          // closed over above, which is stale the moment logout happens —
+          // stops a late-arriving response from silently repopulating user
+          // data right after logout.
+          if (!useAuthStore.getState().isLoggedIn) {
+            return;
+          }
+
           await updateUser(response.user);
         } catch (error) {
           console.log(error);
@@ -165,6 +182,29 @@ const ProfileScreen = ({navigation}: any) => {
     navigation.replace('Home');
   };
 
+  // Opens the website's Terms & Conditions page directly — no in-app
+  // language choice anymore, it's whatever LEGAL_DOCUMENT_URLS points to.
+  const handleOpenTermsAndConditions = async () => {
+    const url = LEGAL_DOCUMENT_URLS.termsAndConditions.en;
+
+    try {
+      const available = await InAppBrowser.isAvailable();
+
+      if (available) {
+        await InAppBrowser.open(url, {
+          dismissButtonStyle: 'close',
+          showTitle: true,
+          enableUrlBarHiding: true,
+          enableDefaultShare: true,
+        });
+      } else {
+        await Linking.openURL(url);
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
   // ── Menu items config ─────────────────────────────────────────────────────
   const menuItems = [
     {
@@ -178,21 +218,28 @@ const ProfileScreen = ({navigation}: any) => {
       key: 'helpSupport',
       icon: 'headset-outline',
       labelKey: 'helpSupport',
-      onPress: () => {},
+      onPress: () => navigation.navigate('HelpSupport'),
+      danger: false,
+    },
+    {
+      key: 'termsAndConditions',
+      icon: 'document-text-outline',
+      labelKey: 'termsAndConditions',
+      onPress: handleOpenTermsAndConditions,
       danger: false,
     },
     {
       key: 'privacyPolicy',
       icon: 'shield-checkmark-outline',
       labelKey: 'privacyPolicy',
-      onPress: () => {},
+      onPress: () => navigation.navigate('PrivacyPolicy'),
       danger: false,
     },
     {
       key: 'aboutApp',
       icon: 'information-circle-outline',
       labelKey: 'aboutApp',
-      onPress: () => {},
+      onPress: () => setAboutAppVisible(true),
       danger: false,
     },
     {
@@ -444,6 +491,11 @@ const ProfileScreen = ({navigation}: any) => {
       <Text style={styles.version}>
         {t('version', language)} 1.0.0
       </Text>
+
+      <AboutAppModal
+        visible={aboutAppVisible}
+        onClose={() => setAboutAppVisible(false)}
+      />
 
     </View>
   );

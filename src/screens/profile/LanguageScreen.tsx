@@ -11,6 +11,7 @@ import Ionicons from '@react-native-vector-icons/ionicons';
 import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import {Fonts} from '../../constants/fonts';
+import {useTheme} from '../../hooks/useTheme';
 
 const LanguageScreen = ({
   navigation,
@@ -22,6 +23,9 @@ const LanguageScreen = ({
   const setLanguage = useLanguageStore(
     state => state.setLanguage,
   );
+
+  const {colors} = useTheme();
+  const styles = createStyles(colors);
 
   const [selectedLanguage, setSelectedLanguage] =
     useState(language);
@@ -50,7 +54,7 @@ const LanguageScreen = ({
                 : 'chevron-back'
             }
             size={22}
-            color="#0F172A"
+            color={colors.textPrimary}
           />
         </TouchableOpacity>
 
@@ -205,11 +209,11 @@ const LanguageScreen = ({
 
 export default LanguageScreen;
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: colors.background,
     paddingHorizontal: 20,
     paddingTop: 50,
   },
@@ -226,7 +230,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 13,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -261,14 +265,14 @@ const styles = StyleSheet.create({
 
   title: {
     fontSize: 28,
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontFamily: Fonts.bold,
     letterSpacing: -0.5,
   },
 
   subtitle: {
     marginTop: 5,
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 13,
     lineHeight: 20,
     fontFamily: Fonts.regular,
@@ -276,7 +280,7 @@ const styles = StyleSheet.create({
 
   // ── Option cards ─────────────────────────
   option: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.card,
     borderRadius: 20,
     padding: 16,
     marginBottom: 12,
@@ -284,7 +288,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     overflow: 'hidden',
     shadowColor: '#64748B',
     shadowOpacity: 0.05,
@@ -295,7 +299,7 @@ const styles = StyleSheet.create({
 
   selectedOption: {
     borderColor: '#4757E7',
-    backgroundColor: '#FAFBFF',
+    backgroundColor: colors.selectedCardBackground,
     shadowColor: '#4757E7',
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -323,7 +327,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 15,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -343,7 +347,7 @@ const styles = StyleSheet.create({
   },
 
   optionTitle: {
-    color: '#0F172A',
+    color: colors.textPrimary,
     fontSize: 16,
     fontFamily: Fonts.semiBold,
   },
@@ -353,7 +357,7 @@ const styles = StyleSheet.create({
   },
 
   optionSubtitle: {
-    color: '#94A3B8',
+    color: colors.textHint,
     marginTop: 3,
     fontSize: 12,
     fontFamily: Fonts.regular,
@@ -365,7 +369,7 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#CBD5E1',
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -417,15 +421,15 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 50,
     borderRadius: 15,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.backgroundSecondary,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
   },
 
   cancelText: {
-    color: '#64748B',
+    color: colors.textSecondary,
     fontSize: 14,
     fontFamily: Fonts.semiBold,
   },
@@ -447,7 +451,7 @@ const styles = StyleSheet.create({
   },
 
   saveButtonDisabled: {
-    backgroundColor: '#CBD5E1',
+    backgroundColor: colors.backgroundSecondary,
     shadowOpacity: 0,
     elevation: 0,
   },

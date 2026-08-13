@@ -16,6 +16,31 @@ import {t} from '../../i18n';
 import {Fonts} from '../../constants/fonts';
 import {useTheme} from '../../hooks/useTheme';
 import {getLocalizedText} from '../../utils/getLocalizedText';
+import Skeleton from '../../components/skeleton/Skeleton';
+
+// Mirrors the real card's shape (image block + meta chips + title + two
+// description lines + button) so swapping skeleton for real content never
+// shifts layout.
+const FeaturedCardSkeleton = ({
+  styles,
+}: {
+  styles: ReturnType<typeof createStyles>;
+}) => (
+  <View style={styles.card}>
+    <Skeleton height={280} borderRadius={0} />
+    <View style={styles.cardBody}>
+      <View style={styles.metaRow}>
+        <Skeleton width={70} height={24} borderRadius={50} />
+        <Skeleton width={90} height={24} borderRadius={50} />
+        <Skeleton width={80} height={24} borderRadius={50} />
+      </View>
+      <Skeleton width="70%" height={20} borderRadius={6} style={{marginBottom: 10}} />
+      <Skeleton width="100%" height={14} borderRadius={6} style={{marginBottom: 6}} />
+      <Skeleton width="55%" height={14} borderRadius={6} style={{marginBottom: 16}} />
+      <Skeleton width="100%" height={48} borderRadius={16} />
+    </View>
+  </View>
+);
 
 
 const getServiceMeta = (
@@ -97,10 +122,22 @@ const getServiceIcon = (
 
 const FeaturedSection = ({navigation}: any) => {
   const services = useServiceStore(state => state.filteredServices);
+  const servicesLoading = useServiceStore(state => state.loading);
+  const servicesError = useServiceStore(state => state.error);
+  const loadServices = useServiceStore(state => state.loadServices);
   const language = useLanguageStore(state => state.language);
 
   const {colors, isDark} = useTheme();
   const styles = createStyles(colors);
+
+  const showSkeleton = servicesLoading && services.length === 0;
+
+  // services.length === 0 alone is ambiguous — it's also true while a
+  // category/search filter genuinely matches nothing, or while the list is
+  // genuinely empty. servicesError distinguishes "the request failed" so
+  // this doesn't silently render an empty section either way.
+  const showError =
+    !showSkeleton && servicesError && services.length === 0;
 
   return (
     <View style={styles.section}>
@@ -110,14 +147,41 @@ const FeaturedSection = ({navigation}: any) => {
         <Text style={styles.heading}>{t('services', language)}</Text>
         <View style={styles.countBadge}>
           <Ionicons name="list-outline" size={13} color={colors.primary} />
-          <Text style={styles.countText}>
-            {services.length} {t('available', language)}
-          </Text>
+          {showSkeleton ? (
+            <Skeleton width={60} height={12} borderRadius={6} />
+          ) : (
+            <Text style={styles.countText}>
+              {services.length} {t('available', language)}
+            </Text>
+          )}
         </View>
       </View>
 
       {/* ── Cards ── */}
-      {services.map((service: any) => {
+      {showSkeleton && (
+        <>
+          <FeaturedCardSkeleton styles={styles} />
+          <FeaturedCardSkeleton styles={styles} />
+        </>
+      )}
+
+      {showError && (
+        <TouchableOpacity
+          style={styles.errorCard}
+          activeOpacity={0.85}
+          onPress={() => loadServices()}>
+          <Ionicons name="cloud-offline-outline" size={26} color={colors.textSecondary} />
+          <Text style={styles.errorText}>
+            {t('failedToLoadServices', language)}
+          </Text>
+          <View style={styles.retryBtn}>
+            <Ionicons name="refresh-outline" size={14} color="#FFFFFF" />
+            <Text style={styles.retryBtnText}>{t('retry', language)}</Text>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {!showSkeleton && !showError && services.map((service: any) => {
 
 const serviceName =
   getLocalizedText(
@@ -154,6 +218,14 @@ const icon =
             activeOpacity={0.96}
             onPress={() => navigation.navigate('ServiceDetails', {service})}>
 
+            {/* Separate wrapper for the rounded/clipped content, apart from
+                the outer shadow — combining borderRadius + overflow:'hidden'
+                + elevation on the same Android view is what let a hairline
+                sliver of the raw image show through at the image/body seam
+                on some cards; splitting the shadow layer from the clip
+                layer removes that seam without changing how the card looks. */}
+            <View style={styles.cardInner}>
+
             {/* IMAGE BLOCK */}
             <View style={styles.imageBlock}>
 <ImageBackground
@@ -175,16 +247,12 @@ const icon =
                     </Text>
                   </View>
 
-                  {/* Rating badge — dark glass */}
-                  <View style={styles.ratingBadge}>
-                    <Ionicons name="star" size={11} color="#FCD34D" />
-                    <Text style={styles.ratingText}>
-                      4.9 · 320
-                    </Text>
-                    <Text style={styles.ratingText}>
-                      {t('reviews', language)}
-                    </Text>
-                  </View>
+                  {/* A real per-service rating/review count is not
+                      available from the API today — a fabricated "4.9 ·
+                      320 reviews" badge previously rendered identically on
+                      every card regardless of actual service. Removed
+                      rather than show data that isn't real; re-add once a
+                      real rating field exists. */}
                 </View>
 
                 {/* Fade gradient — blends image into the card body below.
@@ -271,6 +339,7 @@ const icon =
               </TouchableOpacity>
 
             </View>
+            </View>
           </TouchableOpacity>
         );
       })}
@@ -316,17 +385,60 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     fontFamily: Fonts.semiBold,
   },
 
-  /* ── Card shell ── */
+  /* ── Error state ── */
+  errorCard: {
+    backgroundColor: colors.card,
+    borderRadius: 24,
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  errorText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    textAlign: 'center',
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  retryBtnText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
+  },
+
+  /* ── Card shell ──
+     Shadow/elevation lives on the outer, unclipped view; borderRadius +
+     overflow:'hidden' + background live on the inner `cardInner` wrapper.
+     Combining all of these on one Android view is what caused a hairline
+     sliver of the raw image to show through at the image/body seam on some
+     cards — separating the shadow layer from the clip layer fixes that
+     without changing how the card looks. */
   card: {
     backgroundColor: colors.card,
     borderRadius: 30,
-    overflow: 'hidden',
     marginBottom: 24,
     shadowColor: '#0F172A',
     shadowOpacity: 0.08,
     shadowRadius: 28,
     shadowOffset: {width: 0, height: 10},
     elevation: 10,
+  },
+  cardInner: {
+    backgroundColor: colors.card,
+    borderRadius: 30,
+    overflow: 'hidden',
   },
 
   /* ── Image block ── */
@@ -369,23 +481,6 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     fontFamily: Fonts.semiBold,
     letterSpacing: 0.2,
   },
-  ratingBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(15,23,42,0.48)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 50,
-  },
-  ratingText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontFamily: Fonts.semiBold,
-  },
-
   /* Fade gradient — image dissolves into white card body */
   fadeGradient: {
     position: 'absolute',

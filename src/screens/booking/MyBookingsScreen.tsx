@@ -2,6 +2,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
 } from 'react';
 
 import {
@@ -9,9 +10,10 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
   AppState,
+  Animated,
+  TouchableOpacity,
 } from 'react-native';
 
 import {
@@ -32,22 +34,67 @@ import {Fonts} from '../../constants/fonts';
 import {useTheme} from '../../hooks/useTheme';
 
 import BookingCard from '../../components/booking/BookingCard';
+import BookingCardSkeleton from '../../components/booking/BookingCardSkeleton';
 
 import {RootStackParamList} from '../../navigation/types';
 
 import {useBookingStore} from '../../store/bookingStore';
+import {useAuthStore} from '../../store/authStore';
 
 import Ionicons from '@react-native-vector-icons/ionicons';
 
+const SKELETON_COUNT = 6;
+
+type BookingFilter = 'all' | 'active' | 'completed' | 'cancelled';
+
+const FILTERS: {key: BookingFilter; labelKey: string}[] = [
+  {key: 'all', labelKey: 'filterAll'},
+  {key: 'active', labelKey: 'filterActive'},
+  {key: 'completed', labelKey: 'filterCompleted'},
+  {key: 'cancelled', labelKey: 'filterCancelled'},
+];
+
+// Mobile has no "upcoming" bucket like the website's My Bookings tabs —
+// anything not completed/cancelled (pending, assigned, travelling,
+// in_progress, etc.) is simply "active" here.
+const getFilterBucket = (status?: string | null): BookingFilter => {
+  if (status === 'completed') return 'completed';
+  if (status === 'cancelled') return 'cancelled';
+  return 'active';
+};
+
 const MyBookingsScreen = () => {
 
-  const {bookings, setBookings} = useBookingStore();
+  const bookings = useBookingStore(
+    state => state.bookings,
+  );
+  const setBookings = useBookingStore(
+    state => state.setBookings,
+  );
 
-  const [loading, setLoading] = useState(true);
+  const isLoggedIn = useAuthStore(
+    state => state.isLoggedIn,
+  );
+
+  // Only the very first ever load (no cached bookings yet, in-memory store
+  // is empty because the app just started, or this session never fetched
+  // them) shows the skeleton — a screen revisit within the same session
+  // already has `bookings` populated, so this starts `false` and the real
+  // list renders immediately while a silent background refetch runs.
+  const [loading, setLoading] = useState(bookings.length === 0);
 
   const [refreshing, setRefreshing] = useState(false);
 
   const [loadError, setLoadError] = useState(false);
+
+  const [activeFilter, setActiveFilter] = useState<BookingFilter>('all');
+
+  // Fades the real list in the first time it replaces the skeleton. Starts
+  // already-opaque when there's cached data, so a warm revisit never
+  // plays an unnecessary fade.
+  const contentOpacity = useRef(
+    new Animated.Value(bookings.length > 0 ? 1 : 0),
+  ).current;
 
   const language = useLanguageStore(
     state => state.language,
@@ -62,6 +109,16 @@ const MyBookingsScreen = () => {
     >();
 
   const loadBookings = async () => {
+    // A guest (fresh install, or right after logout) reaching this tab
+    // previously still fired this fetch — the backend correctly rejects
+    // it with 401, but that rendered as "Could not load bookings",
+    // indistinguishable from a real backend outage. Skip the fetch
+    // entirely instead; the empty state below shows a login prompt.
+    if (!isLoggedIn) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const data = await getBookings();
       setBookings(data.bookings || []);
@@ -82,14 +139,14 @@ const MyBookingsScreen = () => {
     setRefreshing(false);
   };
 
-  useEffect(() => {
-    loadBookings();
-  }, []);
-
+  // useFocusEffect already covers the first mount (a screen's initial
+  // focus fires immediately after it), so a separate mount-time useEffect
+  // calling the same loadBookings() only ever duplicated that first fetch.
   useFocusEffect(
     useCallback(() => {
       loadBookings();
-    }, []),
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isLoggedIn]),
   );
 
   useEffect(() => {
@@ -100,47 +157,74 @@ const MyBookingsScreen = () => {
     });
 
     return () => subscription.remove();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
 
-  // ── Loading state ─────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <View style={styles.loaderContainer}>
-        <View style={styles.loaderCard}>
-          <ActivityIndicator
-            size="large"
-            color="#4757E7"
-          />
-          <Text style={styles.loaderText}>
-            {t('loadingBookings', language)}
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  // Only plays when transitioning away from the true first-load skeleton —
+  // contentOpacity already starts at 1 when there's cached data, so this is
+  // a harmless no-op (1 → 1) on every subsequent refresh/refocus.
+  useEffect(() => {
+    if (!loading) {
+      Animated.timing(contentOpacity, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [loading, contentOpacity]);
+
+  const showSkeleton = loading && bookings.length === 0;
+
+  const filteredBookings =
+    activeFilter === 'all'
+      ? bookings
+      : bookings.filter(
+          item => getFilterBucket(item.status) === activeFilter,
+        );
 
   // ── Empty state ───────────────────────────────────────────────────────────
   const EmptyComponent = () => (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconWrap}>
         <Ionicons
-          name={loadError ? 'cloud-offline-outline' : 'document-text-outline'}
+          name={
+            !isLoggedIn
+              ? 'log-in-outline'
+              : loadError
+              ? 'cloud-offline-outline'
+              : 'document-text-outline'
+          }
           size={48}
           color="#4757E7"
         />
       </View>
 
       <Text style={styles.emptyTitle}>
-        {loadError
+        {!isLoggedIn
+          ? t('loginToViewBookings', language)
+          : loadError
           ? t('couldNotLoadBookings', language)
           : t('noBookingsYet', language)}
       </Text>
 
       <Text style={styles.emptyText}>
-        {loadError
+        {!isLoggedIn
+          ? t('loginToViewBookingsDesc', language)
+          : loadError
           ? t('couldNotLoadBookingsDesc', language)
           : t('noBookingsDesc', language)}
       </Text>
+
+      {!isLoggedIn && (
+        <TouchableOpacity
+          style={styles.loginButton}
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('Login')}>
+          <Text style={styles.loginButtonText}>
+            {t('login', language)}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -179,36 +263,73 @@ const MyBookingsScreen = () => {
         )}
       </View>
 
+      {/* ── Filters ── */}
+      {bookings.length > 0 && (
+        <View style={styles.filterRow}>
+          {FILTERS.map(filter => {
+            const isActive = activeFilter === filter.key;
+            return (
+              <TouchableOpacity
+                key={filter.key}
+                style={[
+                  styles.filterChip,
+                  isActive && styles.filterChipActive,
+                ]}
+                activeOpacity={0.8}
+                onPress={() => setActiveFilter(filter.key)}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isActive && styles.filterChipTextActive,
+                  ]}>
+                  {t(filter.labelKey, language)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
+
       {/* ── List ── */}
-      <FlatList
-        data={bookings}
-        keyExtractor={item => item.bookingNumber ?? item._id}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#4757E7"
-            colors={['#4757E7']}
-          />
-        }
-        contentContainerStyle={
-          bookings.length === 0
-            ? styles.listEmpty
-            : styles.listContent
-        }
-        ListEmptyComponent={<EmptyComponent />}
-        renderItem={({item}) => (
-          <BookingCard
-            booking={item}
-            onPress={() =>
-              navigation.navigate('BookingDetails', {
-                bookingNumber: item.bookingNumber,
-              })
+      {showSkeleton ? (
+        <View style={styles.listContent}>
+          {Array.from({length: SKELETON_COUNT}).map((_, index) => (
+            <BookingCardSkeleton key={index} />
+          ))}
+        </View>
+      ) : (
+        <Animated.View style={{flex: 1, opacity: contentOpacity}}>
+          <FlatList
+            data={filteredBookings}
+            keyExtractor={item => item.bookingNumber ?? item._id}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor="#4757E7"
+                colors={['#4757E7']}
+              />
             }
+            contentContainerStyle={
+              filteredBookings.length === 0
+                ? styles.listEmpty
+                : styles.listContent
+            }
+            ListEmptyComponent={<EmptyComponent />}
+            renderItem={({item}) => (
+              <BookingCard
+                booking={item}
+                onPress={() =>
+                  navigation.navigate('BookingDetails', {
+                    bookingNumber: item.bookingNumber,
+                  })
+                }
+              />
+            )}
           />
-        )}
-      />
+        </Animated.View>
+      )}
 
     </View>
   );
@@ -224,34 +345,6 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     paddingTop: 50,
   },
 
-  // ── Loader ────────────────────────────────────────────────────────────────
-  loaderContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-
-  loaderCard: {
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    paddingVertical: 40,
-    paddingHorizontal: 48,
-    alignItems: 'center',
-    gap: 16,
-    shadowColor: '#64748B',
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: {width: 0, height: 6},
-    elevation: 5,
-  },
-
-  loaderText: {
-    fontFamily: Fonts.medium,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
 
   // ── Header ────────────────────────────────────────────────────────────────
   headerSection: {
@@ -322,6 +415,40 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     color: colors.textSecondary,
   },
 
+  // ── Filters ───────────────────────────────────────────────────────────────
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  filterChipActive: {
+    backgroundColor: '#4757E7',
+    borderColor: '#4757E7',
+  },
+
+  filterChipText: {
+    fontFamily: Fonts.medium,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+
+  filterChipTextActive: {
+    fontFamily: Fonts.semiBold,
+    color: '#FFFFFF',
+  },
+
   // ── List ──────────────────────────────────────────────────────────────────
   listContent: {
     paddingHorizontal: 20,
@@ -374,6 +501,20 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     textAlign: 'center',
     lineHeight: 22,
     fontFamily: Fonts.regular,
+    fontSize: 14,
+  },
+
+  loginButton: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+
+  loginButtonText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.semiBold,
     fontSize: 14,
   },
 });

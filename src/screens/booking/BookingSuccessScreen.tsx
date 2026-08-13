@@ -67,6 +67,20 @@ const clearOffer =
 const clearOffers =
   useAppDataStore(state => state.clearOffers);
 
+  // The booking draft was only ever cleared when the customer explicitly
+  // tapped "Back to Home" below — pressing hardware/gesture back from this
+  // screen (a normal thing to do) instead landed on Booking Summary with
+  // the SAME draft still populated, letting Confirm/Pay be tapped again
+  // and create a second, real, duplicate booking. Clearing it as soon as
+  // this screen is reached (the booking has already been created by now)
+  // closes that path regardless of how the customer navigates from here.
+  useEffect(() => {
+    clearBooking();
+    clearOffer();
+    clearOffers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     // 1. Pop in the check circle
     Animated.spring(scaleAnim, {

@@ -40,6 +40,13 @@ interface NotificationState {
 
   refreshing: boolean;
 
+  // Bumped by every local mutation (markRead, markAllRead). Screens use
+  // this to detect whether a fetch that started before their mutation is
+  // still in flight, and skip applying it if so — otherwise a slower,
+  // earlier GET /notifications can resolve after the mutation and silently
+  // overwrite the just-corrected read state with stale (pre-mutation) data.
+  mutationVersion: number;
+
   setNotifications: (
     notifications: NotificationItem[],
   ) => void;
@@ -86,6 +93,8 @@ export const useNotificationStore =
     loading: false,
 
     refreshing: false,
+
+    mutationVersion: 0,
 
     setNotifications: notifications =>
       set({
@@ -142,6 +151,8 @@ markRead: id =>
       unreadCount: wasUnread
         ? Math.max(0, state.unreadCount - 1)
         : state.unreadCount,
+
+      mutationVersion: state.mutationVersion + 1,
     };
   }),
 
@@ -156,6 +167,7 @@ markAllRead: () =>
       item.isRead ? item : {...item, isRead: true},
     ),
     unreadCount: 0,
+    mutationVersion: state.mutationVersion + 1,
   })),
 
 removeNotification: id =>

@@ -15,6 +15,7 @@ import {
   Platform,
   ActivityIndicator,
   Modal,
+  Linking,
 } from 'react-native';
 
 import {useBookingStore} from '../../store/bookingStore';
@@ -25,6 +26,7 @@ import {
   updateAddress,
   getAddresses,
   deleteAddress,
+  validateAddressZone,
 } from '../../services/addressService';
 
 import {updateName} from '../../services/userService';
@@ -39,9 +41,13 @@ import Geolocation from '@react-native-community/geolocation';
 
 import MapView, {Marker} from 'react-native-maps';
 
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
 import {getAddressFromCoordinates} from '../../services/locationService';
 
 import {showSuccess, showError} from '../../utils/showToast';
+
+import {showDialog} from '../../components/dialog/FeedbackDialog';
 
 import Ionicons from '@react-native-vector-icons/ionicons';
 
@@ -53,7 +59,10 @@ import {useLanguageStore} from '../../store/languageStore';
 
 import {t} from '../../i18n';
 
-import {promptForEnableLocationIfNeeded} from 'react-native-android-location-enabler';
+// react-native-android-location-enabler has no iOS implementation at all —
+// its native binding is evaluated at import time, so a static top-level
+// import of this module crashes the app on iOS before any screen ever
+// renders. It must only ever be required inside an Android-only branch.
 
 import {useAppDataStore} from '../../store/appDataStore';
 
@@ -76,6 +85,7 @@ const AddressScreen = ({navigation}: any) => {
 
   const {colors} = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const cachedAddresses = useAppDataStore(
     state => state.addresses,
@@ -106,6 +116,12 @@ const AddressScreen = ({navigation}: any) => {
   const [showForm, setShowForm] = useState(false);
 
   const mapRef = useRef<MapView>(null);
+
+  // Tracks the best location fix applied so far during a single
+  // fetchCurrentLocation() run, so the fast/coarse pass and the
+  // precise/high-accuracy pass (see fetchCurrentLocation below) never
+  // clobber each other regardless of which one happens to resolve first.
+  const locationFixQualityRef = useRef<'none' | 'coarse' | 'precise'>('none');
 
   const setCoordinates = useBookingStore(
     state => state.setCoordinates,
@@ -157,6 +173,12 @@ const AddressScreen = ({navigation}: any) => {
   const [fetchingLocation, setFetchingLocation] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(true);
 
+  // Distinguishes "the request failed" from "this customer genuinely has
+  // no saved addresses yet" — loadAddresses()'s catch previously did
+  // nothing at all (not even a console.log), so a failed fetch rendered
+  // identically to a real empty state.
+  const [loadAddressesError, setLoadAddressesError] = useState(false);
+
   // Editing an existing saved address (as opposed to picking one for this
   // booking, or adding a brand new one) — distinct from selectedSavedAddress
   // so the form can be open at the same time a saved address remains chosen.
@@ -196,9 +218,36 @@ const AddressScreen = ({navigation}: any) => {
     }
   }, [savedAddresses, bookingAddress]);
 
+  // The header's own back button already closes the open form first
+  // instead of navigating away (see its onPress above) — but that only
+  // covers a tap on that specific button. The Android hardware/gesture
+  // back button and iOS's swipe-back gesture both bypass it entirely and
+  // fall through to React Navigation's default pop, silently discarding
+  // whatever was typed. beforeRemove intercepts ALL of those paths
+  // uniformly (it fires for hardware back, swipe-back, and header back
+  // alike), so blocking it here while the form is open mirrors the
+  // software button's behavior everywhere a back action can originate.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener(
+      'beforeRemove',
+      (event: any) => {
+        if (!showForm) {
+          return;
+        }
+
+        event.preventDefault();
+        setShowForm(false);
+        setEditingAddressId(null);
+      },
+    );
+
+    return unsubscribe;
+  }, [navigation, showForm]);
+
   const loadAddresses = async () => {
     try {
       setLoadingAddresses(true);
+      setLoadAddressesError(false);
 
       const response = await getAddresses();
 
@@ -207,6 +256,8 @@ const AddressScreen = ({navigation}: any) => {
       setSavedAddresses(addresses);
       setAddresses(addresses);
     } catch (error) {
+      console.log(error);
+      setLoadAddressesError(true);
     } finally {
       setLoadingAddresses(false);
     }
@@ -233,32 +284,128 @@ const AddressScreen = ({navigation}: any) => {
     }
   };
 
-  const requestLocationPermission = async () => {
+  // On Android, PermissionsAndroid distinguishes a plain "denied" (user can
+  // be asked again) from "never ask again" (permanently blocked — the OS
+  // will no longer show the prompt at all). Only the latter needs a
+  // Settings-deep-link recovery path; a plain denial keeps the existing
+  // inline error behavior.
+  const requestLocationPermission = async (): Promise<
+    'granted' | 'denied' | 'blocked'
+  > => {
     if (Platform.OS === 'android') {
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       );
 
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
+      if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+        return 'granted';
+      }
+
+      if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        return 'blocked';
+      }
+
+      return 'denied';
     }
 
-    return true;
+    // iOS has no equivalent up-front check: @react-native-community/geolocation
+    // requests authorization itself the moment getCurrentPosition() is first
+    // called (see its native module), and reports a denial through that
+    // call's own error callback (handled in fetchCurrentLocation below).
+    return 'granted';
+  };
+
+  const showLocationSettingsDialog = () => {
+    showDialog({
+      variant: 'warning',
+      title: t('locationPermissionDenied', language),
+      description: t('locationPermissionPermanentlyDenied', language),
+      buttons: [
+        {text: t('cancel', language), style: 'cancel'},
+        {
+          text: t('openSettings', language),
+          onPress: () => Linking.openSettings(),
+        },
+      ],
+    });
   };
 
   const prepareLocation = async () => {
-    const hasPermission = await requestLocationPermission();
+    const permissionResult = await requestLocationPermission();
 
-    if (!hasPermission) {
+    if (permissionResult === 'blocked') {
+      showLocationSettingsDialog();
+      return;
+    }
+
+    if (permissionResult === 'denied') {
       setError(t('locationPermissionDenied', language));
       return;
     }
 
-    try {
-      await promptForEnableLocationIfNeeded({interval: 10000});
-      setLocationReady(true);
-    } catch (error) {
-      showError(t('pleaseEnableLocation', language));
+    if (Platform.OS === 'android') {
+      try {
+        const {
+          promptForEnableLocationIfNeeded,
+        } = require('react-native-android-location-enabler');
+
+        await promptForEnableLocationIfNeeded({interval: 10000});
+      } catch (error) {
+        showError(t('pleaseEnableLocation', language));
+        return;
+      }
+    }
+
+    setLocationReady(true);
+  };
+
+  // Applies a resolved position to the map/address state — shared by both
+  // the fast/coarse pass and the precise/high-accuracy pass below. `quality`
+  // guards against the coarse pass overwriting a precise fix that already
+  // landed first (a real possibility since the two requests run
+  // concurrently), while still always allowing a later precise fix to
+  // replace an earlier coarse one.
+  const applyLocationFix = async (
+    position: {coords: {latitude: number; longitude: number}},
+    quality: 'coarse' | 'precise',
+  ) => {
+    if (quality === 'coarse' && locationFixQualityRef.current === 'precise') {
       return;
+    }
+    locationFixQualityRef.current = quality;
+
+    const lat = position.coords.latitude;
+    const lng = position.coords.longitude;
+
+    setCurrentLatitude(lat);
+    setCurrentLongitude(lng);
+    setLatitude(lat);
+    setLongitude(lng);
+    setCoordinates(lat, lng);
+
+    setAddressText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+
+    const newRegion = {
+      latitude: lat,
+      longitude: lng,
+      latitudeDelta: 0.01,
+      longitudeDelta: 0.01,
+    };
+
+    setRegion(newRegion);
+    setShowMap(true);
+
+    setTimeout(() => {
+      mapRef.current?.animateToRegion(newRegion, 1000);
+    }, 300);
+
+    const fetchedAddress = await getAddressFromCoordinates(lat, lng);
+
+    // A slower coarse-pass geocode resolving after a precise fix already
+    // landed would otherwise overwrite the more accurate address text with
+    // a less accurate one — only apply it if nothing better has since won.
+    if (fetchedAddress && locationFixQualityRef.current === quality) {
+      setAddressText(fetchedAddress);
     }
   };
 
@@ -268,54 +415,65 @@ const AddressScreen = ({navigation}: any) => {
     }
 
     setFetchingLocation(true);
+    locationFixQualityRef.current = 'none';
+
+    // Real-world apps (Uber, Careem, etc.) never gamble everything on one
+    // slow, high-accuracy GPS request — a cold GPS lock can genuinely take
+    // 15-30s indoors or under a cloudy sky, which is exactly what was
+    // firing the "location fetch failed" timeout even when location
+    // services were working fine. Instead, run two requests:
+    //   1. A fast, low-accuracy pass (network/cell-based, usually back in
+    //      1-2s) that places a pin and starts the address lookup instantly.
+    //   2. A high-accuracy pass that quietly refines the pin once a real
+    //      GPS fix comes in, without ever blocking the user on it.
+    // If the precise pass times out, whatever the fast pass already placed
+    // stays on screen instead of being replaced by a hard error.
+    Geolocation.getCurrentPosition(
+      position => {
+        void applyLocationFix(position, 'coarse');
+      },
+      () => {
+        // Silently ignored — the precise pass below is the one whose
+        // failure actually matters to the user.
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 5000,
+        maximumAge: 60000,
+      },
+    );
 
     Geolocation.getCurrentPosition(
       async position => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-
-        setCurrentLatitude(lat);
-        setCurrentLongitude(lng);
-        setLatitude(lat);
-        setLongitude(lng);
-        setCoordinates(lat, lng);
-
-        setAddressText(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
-
-        const newRegion = {
-          latitude: lat,
-          longitude: lng,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        };
-
-        setRegion(newRegion);
-        setShowMap(true);
-
-        setTimeout(() => {
-          mapRef.current?.animateToRegion(newRegion, 1000);
-        }, 300);
-
-        setCoordinates(lat, lng);
-
-        const fetchedAddress = await getAddressFromCoordinates(lat, lng);
-
-        if (fetchedAddress) {
-          setAddressText(fetchedAddress);
-        }
-
+        await applyLocationFix(position, 'precise');
         setFetchingLocation(false);
       },
 
       error => {
         setFetchingLocation(false);
-        showError(error.message);
+
+        // On iOS, a permission denial only ever surfaces here (there is no
+        // separate up-front permission check — see requestLocationPermission
+        // above), and it's effectively permanent: once denied, iOS never
+        // shows the system prompt again for this app. error.message in that
+        // case is a raw, English-only native string, so route it through the
+        // same Settings-recovery dialog Android's "never ask again" case
+        // uses instead of surfacing it directly.
+        if (error.code === error.PERMISSION_DENIED) {
+          showLocationSettingsDialog();
+        } else if (locationFixQualityRef.current === 'none') {
+          // Only surface an error if the fast pass above also failed to
+          // produce anything — if it already placed an approximate pin,
+          // that's a far better outcome than an error over a location
+          // that's already correctly on screen, just not GPS-precise.
+          showError(error.message);
+        }
       },
 
       {
         enableHighAccuracy: true,
         timeout: 15000,
-        maximumAge: 10000,
+        maximumAge: 0,
       },
     );
   };
@@ -333,6 +491,16 @@ const AddressScreen = ({navigation}: any) => {
 
     if (!address.trim()) {
       setAddressError(t('pleaseEnterAddress', language));
+      return;
+    }
+
+    // Only serviceable addresses should ever exist in the system — the
+    // backend validates the location against ERP's service zones, but it
+    // can only do that if real coordinates are sent, so typing an address
+    // without ever touching the map/current-location controls must be
+    // blocked here before any network call.
+    if (!latitude || !longitude) {
+      setAddressError(t('pleaseSelectLocationOnMap', language));
       return;
     }
 
@@ -431,8 +599,10 @@ const AddressScreen = ({navigation}: any) => {
       showSuccess(t('addressSavedSuccessfully', language));
     } catch (error: any) {
       showError(
-        error?.response?.data?.message ||
-          t('failedToSaveAddress', language),
+        error?.response?.data?.code === 'OUT_OF_SERVICE_ZONE'
+          ? t('outOfServiceZone', language)
+          : error?.response?.data?.message ||
+              t('failedToSaveAddress', language),
       );
     }
   };
@@ -475,9 +645,35 @@ const AddressScreen = ({navigation}: any) => {
         }
       }
 
+      // ERP's service zones can change after an address was saved (a zone
+      // shrunk, merged, or was deactivated) — re-confirm the location is
+      // still serviceable right before handing it to booking, whether it
+      // was just saved above or is an older previously-saved address.
+      if (latitude && longitude) {
+        try {
+          await validateAddressZone(latitude, longitude);
+        } catch (zoneError: any) {
+          setError(
+            zoneError?.response?.data?.code === 'OUT_OF_SERVICE_ZONE'
+              ? t('outOfServiceZone', language)
+              : zoneError?.response?.data?.message ||
+                  t('failedToSaveAddress', language),
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
       setCustomerName(customerName);
       setSecondaryPhone(secondaryPhone);
       setAddress(address);
+
+      // Selecting a saved address only updated this screen's local
+      // latitude/longitude state — never the booking store PaymentScreen
+      // reads from, so bookings made from a saved address stored 0,0 in
+      // ERP. The "new address"/map/current-location paths already call
+      // this directly, so this makes the saved-address path consistent.
+      setCoordinates(latitude ?? 0, longitude ?? 0);
 
       navigation.navigate('BookingSummary');
     } catch (err: any) {
@@ -501,7 +697,23 @@ const AddressScreen = ({navigation}: any) => {
         <View style={styles.headerContainer}>
           <View style={styles.topRow}>
             <TouchableOpacity
-              onPress={() => navigation.goBack()}
+              onPress={() => {
+                // The Add/Edit form has its own back arrow just below this
+                // one (same screen, same time) that only closes the form.
+                // This header button used to always navigate away
+                // regardless — tapping it instead of the form's own arrow
+                // silently discarded whatever the user had typed. Closing
+                // the form first makes both back controls behave the same
+                // way while the form is open; only navigates away when
+                // there's no form to close.
+                if (showForm) {
+                  setShowForm(false);
+                  setEditingAddressId(null);
+                  return;
+                }
+
+                navigation.goBack();
+              }}
               style={styles.backButton}
               activeOpacity={0.7}>
               <Ionicons
@@ -590,17 +802,40 @@ const AddressScreen = ({navigation}: any) => {
                   <View style={styles.emptyAddresses}>
                     <View style={styles.emptyAddressIcon}>
                       <Ionicons
-                        name="location-outline"
+                        name={
+                          loadAddressesError
+                            ? 'cloud-offline-outline'
+                            : 'location-outline'
+                        }
                         size={36}
                         color="#2563EB"
                       />
                     </View>
                     <Text style={styles.emptyAddressTitle}>
-                      {t('noSavedAddresses', language)}
+                      {loadAddressesError
+                        ? t('failedToLoadAddresses', language)
+                        : t('noSavedAddresses', language)}
                     </Text>
-                    <Text style={styles.emptyAddressSubtitle}>
-                      {t('addAddressToContinue', language)}
-                    </Text>
+                    {!loadAddressesError && (
+                      <Text style={styles.emptyAddressSubtitle}>
+                        {t('addAddressToContinue', language)}
+                      </Text>
+                    )}
+                    {loadAddressesError && (
+                      <TouchableOpacity
+                        style={styles.addressRetryBtn}
+                        activeOpacity={0.85}
+                        onPress={() => loadAddresses()}>
+                        <Ionicons
+                          name="refresh-outline"
+                          size={14}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.addressRetryBtnText}>
+                          {t('retry', language)}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
 
@@ -1077,7 +1312,7 @@ const AddressScreen = ({navigation}: any) => {
 
       {/* ── Sticky Footer ── */}
       {!showForm && (
-        <View style={styles.stickyFooter}>
+        <View style={[styles.stickyFooter, {bottom: 24 + insets.bottom}]}>
           <TouchableOpacity
             style={[
               styles.button,
@@ -1248,6 +1483,23 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     fontFamily: Fonts.regular,
     fontSize: 13,
     color: colors.textSecondary,
+  },
+
+  addressRetryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
+    marginTop: 14,
+  },
+
+  addressRetryBtnText: {
+    color: '#FFFFFF',
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
   },
 
   savedCard: {

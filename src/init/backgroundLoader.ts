@@ -54,3 +54,13 @@ await Promise.all(
 );
 
   };
+
+// authStore.logout() wipes appDataStore's packages/addOns cache (so the
+// next customer on a shared device never sees the previous one's data), but
+// the one-shot guard above would otherwise stay tripped for the rest of the
+// app process — leaving every service's packages permanently empty after a
+// logout, even once the user logs back in. Call this alongside that reset
+// so the next Home mount preloads again instead of silently no-op-ing.
+export const resetBackgroundLoading = () => {
+  initialized = false;
+};

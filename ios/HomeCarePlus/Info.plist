@@ -59,6 +59,7 @@
 		<string>Poppins-Medium.ttf</string>
 		<string>Poppins-Regular.ttf</string>
 		<string>Poppins-SemiBold.ttf</string>
+		<string>Ionicons.ttf</string>
 	</array>
 
 <key>CFBundleURLTypes</key>
@@ -76,6 +77,22 @@
         <array>
 
             <string>homecareplus</string>
+
+        </array>
+
+    </dict>
+
+    <dict>
+
+        <key>CFBundleURLName</key>
+
+        <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+
+        <key>CFBundleURLSchemes</key>
+
+        <array>
+
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 
         </array>
 

@@ -8,13 +8,14 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Alert,
   StyleSheet,
   ScrollView,
   Modal,
   TextInput,
   Linking,
 } from 'react-native';
+
+import {showDialog} from '../../components/dialog/FeedbackDialog';
 
 import {createBooking} from '../../services/bookingService';
 
@@ -36,6 +37,8 @@ import {updateEmail} from '../../services/userService';
 
 import InAppBrowser from 'react-native-inappbrowser-reborn';
 
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
 import {
   createTamaraCheckout,
   verifyTamaraPayment,
@@ -45,6 +48,20 @@ import {
 
 import {waitForPushRegistration} from '../../services/notificationService';
 
+import {toRiyadhISOString} from '../../utils/riyadhTime';
+
+import {pollPaymentStatus} from '../../services/paymentService';
+
+import {
+  TabbyIcon,
+  TamaraLogo,
+  MadaLogo,
+  VisaLogo,
+  ApplePayLogo,
+  LogoTile,
+  TelrLogoImage,
+} from '../../components/booking/PaymentBrandLogos';
+
 const PaymentScreen = ({
   navigation,
 }: any) => {
@@ -52,38 +69,25 @@ const PaymentScreen = ({
   const [emailModalVisible, setEmailModalVisible] = useState(false);
   const [email, setEmail] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('ONLINE');
-  const [providerModalVisible, setProviderModalVisible] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState('tamara');
-
-  const PAYMENT_PROVIDERS = [
-    {
-      id: 'tamara',
-      name: 'Tamara',
-      icon: 'card-outline' as const,
-      enabled: true,
-    },
-    {
-      // ERP's payment_provider Selection stores this gateway as 'teller'
-      // (hcp_booking.py) — the id here must match that exactly even though
-      // the customer-facing name is "Telr".
-      id: 'teller',
-      name: 'Telr',
-      icon: 'card-outline' as const,
-      enabled: true,
-    },
-    {
-      id: 'tabby',
-      name: 'Tabby',
-      icon: 'card-outline' as const,
-      enabled: false,
-    },
-  ];
 
 const bookingIdRef =
   useRef<string | null>(null);
 
 const bookingNumberRef =
   useRef<string | null>(null);
+
+// Stable for the lifetime of this screen instance (generated once, not
+// per tap) — lets the backend recognize a manual retry (user re-tapping
+// Pay/Confirm after the first attempt's response was lost, e.g. to a
+// dropped connection right as ERP finished creating the booking) as the
+// SAME attempt, instead of creating a second real booking. No UUID
+// library needed — this only has to be unique enough to dedupe retries
+// from this one device/session, not globally unique.
+const idempotencyKeyRef =
+  useRef<string>(
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
 
   const user = useAuthStore(state => state.user);
   const updateUser = useAuthStore(state => state.updateUser);
@@ -92,6 +96,7 @@ const bookingNumberRef =
   const selectedPackage = useBookingStore(state => state.selectedPackage);
   const selectedAddOns = useBookingStore(state => state.selectedAddOns);
   const address = useBookingStore(state => state.address);
+  const customerName = useBookingStore(state => state.customerName);
   const latitude = useBookingStore(state => state.latitude);
   const selectedDate = useBookingStore(
   state => state.selectedDate,
@@ -115,6 +120,7 @@ const selectedSlotStartHour = useBookingStore(
 
   const {colors} = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const addOnTotal = selectedAddOns.reduce(
     (total, item) => total + item.price,
@@ -136,20 +142,14 @@ const selectedSlotStartHour = useBookingStore(
   }
 
   // Combine the selected calendar date with the selected slot's start hour
-  // into one real point in time, built in the DEVICE'S LOCAL timezone (no
-  // hardcoded offset) and converted to UTC — previously bookingDate carried
-  // no time-of-day at all, so ERP always stored midnight.
-  const [year, month, day] = selectedDate.split('-').map(Number);
-
-  const combinedBookingDate = new Date(
-    year,
-    (month || 1) - 1,
-    day || 1,
+  // into one real point in time. selectedDate/selectedSlotStartHour are
+  // always Saudi (Asia/Riyadh) business time — this app is Saudi-only —
+  // so the conversion to UTC must anchor on Riyadh's fixed +3:00 offset,
+  // never the device's own local timezone, to match the website exactly.
+  const combinedBookingDate = toRiyadhISOString(
+    selectedDate,
     selectedSlotStartHour ?? 0,
-    0,
-    0,
-    0,
-  ).toISOString();
+  );
 
   return {
     customer: user?._id,
@@ -157,11 +157,14 @@ const selectedSlotStartHour = useBookingStore(
     package: selectedPackage?.id,
     addOns: selectedAddOns.map(item => item.id),
     address: {
+      customerName,
       fullAddress: address,
       latitude,
       longitude,
     },
     bookingDate: combinedBookingDate,
+
+    idempotencyKey: idempotencyKeyRef.current,
 
 timeSlot: selectedTimeSlot,
     totalAmount: originalAmount > 0 ? originalAmount : totalAmount,
@@ -230,7 +233,8 @@ if (available) {
 }
 
 const verify =
-  await verifyTamaraPayment(
+  await pollPaymentStatus(
+    verifyTamaraPayment,
     booking.id,
   );
 
@@ -265,7 +269,8 @@ navigation.replace(
     try {
 
       const verify =
-        await verifyTamaraPayment(
+        await pollPaymentStatus(
+          verifyTamaraPayment,
           bookingIdRef.current,
         );
 
@@ -312,10 +317,11 @@ navigation.replace(
 
   }
 
-  Alert.alert(
-    'Payment Error',
-    'Unable to start payment.',
-  );
+  showDialog({
+    variant: 'error',
+    title: 'Payment Error',
+    description: 'Unable to start payment.',
+  });
 
 } finally {
 
@@ -361,11 +367,13 @@ navigation.replace(
       } catch (checkoutError: any) {
         console.log(checkoutError);
 
-        Alert.alert(
-          'Payment Error',
-          checkoutError?.response?.data?.message ||
+        showDialog({
+          variant: 'error',
+          title: 'Payment Error',
+          description:
+            checkoutError?.response?.data?.message ||
             'Unable to start Telr checkout.',
-        );
+        });
 
         navigation.replace('BookingDetails', {
           bookingNumber: bookingNumberRef.current,
@@ -393,7 +401,7 @@ navigation.replace(
         await Linking.openURL(checkoutUrl);
       }
 
-      const verify = await verifyTelrPayment(booking.id);
+      const verify = await pollPaymentStatus(verifyTelrPayment, booking.id);
 
       if (verify.paymentStatus === 'paid') {
         navigation.replace('BookingSuccess', {
@@ -410,7 +418,7 @@ navigation.replace(
 
       if (bookingIdRef.current) {
         try {
-          const verify = await verifyTelrPayment(bookingIdRef.current);
+          const verify = await pollPaymentStatus(verifyTelrPayment, bookingIdRef.current);
 
           if (verify.paymentStatus === 'paid') {
             navigation.replace('BookingSuccess', {
@@ -433,10 +441,11 @@ navigation.replace(
         }
       }
 
-      Alert.alert(
-        'Payment Error',
-        'Unable to start payment.',
-      );
+      showDialog({
+        variant: 'error',
+        title: 'Payment Error',
+        description: 'Unable to start payment.',
+      });
     } finally {
       setLoading(false);
     }
@@ -455,9 +464,10 @@ const emailRegex =
 
 if (!emailRegex.test(trimmedEmail)) {
 
-Alert.alert(
-  t('invalidEmail', language),
-);
+showDialog({
+  variant: 'warning',
+  title: t('invalidEmail', language),
+});
 
   return;
 
@@ -476,14 +486,19 @@ Alert.alert(
 
       setEmailModalVisible(false);
 
-      await startTamaraPayment();
+      if (selectedProvider === 'tamara') {
+        await startTamaraPayment();
+      } else if (selectedProvider === 'teller') {
+        await startTelrPayment();
+      }
     } catch (error: any) {
       console.log(error);
 
-      Alert.alert(
-        'Payment Error',
-        error?.response?.data?.message || 'Unable to update email.',
-      );
+      showDialog({
+        variant: 'error',
+        title: 'Payment Error',
+        description: error?.response?.data?.message || 'Unable to update email.',
+      });
     } finally {
       setLoading(false);
     }
@@ -500,7 +515,8 @@ Alert.alert(
     }
 
     if (paymentMethod === 'ONLINE') {
-      setProviderModalVisible(true);
+      setEmail(user?.email || '');
+      setEmailModalVisible(true);
       return;
     }
 
@@ -519,10 +535,11 @@ Alert.alert(
     } catch (error: any) {
       console.log(error);
 
-      Alert.alert(
-        'Booking Error',
-        error?.response?.data?.message || 'Unable to confirm booking.',
-      );
+      showDialog({
+        variant: 'error',
+        title: 'Booking Error',
+        description: error?.response?.data?.message || 'Unable to confirm booking.',
+      });
     } finally {
       setLoading(false);
     }
@@ -642,51 +659,6 @@ Alert.alert(
             {t('selectPaymentMethod', language)}
           </Text>
 
-          {/* Online */}
-          <TouchableOpacity
-            style={[
-              styles.methodCard,
-              paymentMethod === 'ONLINE' && styles.selectedMethod,
-            ]}
-            onPress={() => setPaymentMethod('ONLINE')}
-            activeOpacity={0.8}>
-
-            <View style={styles.methodRow}>
-              <View style={[
-                styles.methodIconWrap,
-                paymentMethod === 'ONLINE' && styles.methodIconWrapSelected,
-              ]}>
-                <Ionicons
-                  name="card-outline"
-                  size={22}
-                  color={paymentMethod === 'ONLINE' ? colors.primary : colors.textSecondary}
-                />
-              </View>
-
-              <View style={styles.methodTextBlock}>
-                <Text style={[
-                  styles.methodTitle,
-                  paymentMethod === 'ONLINE' && styles.methodTitleSelected,
-                ]}>
-                  {t('payOnline', language)}
-                </Text>
-                <Text style={styles.methodDesc}>
-                  {t('onlinePaymentDesc', language)}
-                </Text>
-              </View>
-
-              <View style={[
-                styles.radioOuter,
-                paymentMethod === 'ONLINE' && styles.radioOuterSelected,
-              ]}>
-                {paymentMethod === 'ONLINE' && (
-                  <View style={styles.radioInner} />
-                )}
-              </View>
-            </View>
-
-          </TouchableOpacity>
-
           {/* COD */}
           <TouchableOpacity
             style={[
@@ -697,15 +669,8 @@ Alert.alert(
             activeOpacity={0.8}>
 
             <View style={styles.methodRow}>
-              <View style={[
-                styles.methodIconWrap,
-                paymentMethod === 'COD' && styles.methodIconWrapSelected,
-              ]}>
-                <Ionicons
-                  name="cash-outline"
-                  size={22}
-                  color={paymentMethod === 'COD' ? colors.primary : colors.textSecondary}
-                />
+              <View style={[styles.brandIconWrap, {backgroundColor: '#006C35'}]}>
+                <Ionicons name="cash-outline" size={20} color="#FFFFFF" />
               </View>
 
               <View style={styles.methodTextBlock}>
@@ -713,7 +678,7 @@ Alert.alert(
                   styles.methodTitle,
                   paymentMethod === 'COD' && styles.methodTitleSelected,
                 ]}>
-                  {t('cashOnDelivery', language)}
+                  {t('payAtService', language)}
                 </Text>
                 <Text style={styles.methodDesc}>
                   {t('cashOnDeliveryDesc', language)}
@@ -731,12 +696,108 @@ Alert.alert(
             </View>
 
           </TouchableOpacity>
+
+          {/* Telr */}
+          <TouchableOpacity
+            style={[
+              styles.methodCard,
+              paymentMethod === 'ONLINE' && selectedProvider === 'teller' && styles.selectedMethod,
+            ]}
+            onPress={() => {
+              setPaymentMethod('ONLINE');
+              setSelectedProvider('teller');
+            }}
+            activeOpacity={0.8}>
+
+            <View style={styles.methodRow}>
+              <View style={styles.telrIconWrap}>
+                <TelrLogoImage width={24} />
+              </View>
+
+              <View style={styles.methodTextBlock}>
+                <Text style={[
+                  styles.methodTitle,
+                  paymentMethod === 'ONLINE' && selectedProvider === 'teller' && styles.methodTitleSelected,
+                ]}>
+                  {t('payUsingCard', language)}
+                </Text>
+                <Text style={styles.methodDesc}>
+                  {t('onlinePaymentDesc', language)}
+                </Text>
+                <View style={styles.networksRow}>
+                  <LogoTile>
+                    <MadaLogo height={14} />
+                  </LogoTile>
+                  <LogoTile>
+                    <VisaLogo height={16} />
+                  </LogoTile>
+                  <LogoTile>
+                    <ApplePayLogo height={16} />
+                  </LogoTile>
+                </View>
+              </View>
+
+              <View style={[
+                styles.radioOuter,
+                paymentMethod === 'ONLINE' && selectedProvider === 'teller' && styles.radioOuterSelected,
+              ]}>
+                {paymentMethod === 'ONLINE' && selectedProvider === 'teller' && (
+                  <View style={styles.radioInner} />
+                )}
+              </View>
+            </View>
+
+          </TouchableOpacity>
+
+          {/* Tabby + Tamara */}
+          <TouchableOpacity
+            style={[
+              styles.methodCard,
+              paymentMethod === 'ONLINE' && selectedProvider === 'tamara' && styles.selectedMethod,
+            ]}
+            onPress={() => {
+              setPaymentMethod('ONLINE');
+              setSelectedProvider('tamara');
+            }}
+            activeOpacity={0.8}>
+
+            <View style={styles.methodRow}>
+              <View style={styles.tabbyTamaraIconWrap}>
+                <TabbyIcon size={36} />
+                <View style={styles.tamaraChip}>
+                  <TamaraLogo height={10} />
+                </View>
+              </View>
+
+              <View style={styles.methodTextBlock}>
+                <Text style={[
+                  styles.methodTitle,
+                  paymentMethod === 'ONLINE' && selectedProvider === 'tamara' && styles.methodTitleSelected,
+                ]}>
+                  {t('payOnlineTabbyTamara', language)}
+                </Text>
+                <Text style={styles.methodDesc}>
+                  {t('onlinePaymentDesc', language)}
+                </Text>
+              </View>
+
+              <View style={[
+                styles.radioOuter,
+                paymentMethod === 'ONLINE' && selectedProvider === 'tamara' && styles.radioOuterSelected,
+              ]}>
+                {paymentMethod === 'ONLINE' && selectedProvider === 'tamara' && (
+                  <View style={styles.radioInner} />
+                )}
+              </View>
+            </View>
+
+          </TouchableOpacity>
         </View>
 
       </ScrollView>
 
       {/* ── Sticky CTA ── */}
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, {bottom: 28 + insets.bottom}]}>
         <TouchableOpacity
           style={[
             styles.button,
@@ -766,119 +827,6 @@ Alert.alert(
           </Text>
         </TouchableOpacity>
       </View>
-
-      {/* ── Payment Provider Modal (bottom sheet) ── */}
-      <Modal
-        visible={providerModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setProviderModalVisible(false)}>
-
-        <TouchableOpacity
-          style={styles.sheetOverlay}
-          activeOpacity={1}
-          onPress={() => setProviderModalVisible(false)}>
-
-          <TouchableOpacity
-            activeOpacity={1}
-            style={styles.sheetCard}
-            onPress={() => {}}>
-
-            <View style={styles.sheetHandle} />
-
-            <Text style={styles.sheetTitle}>
-              {t('choosePaymentProvider', language)}
-            </Text>
-            <Text style={styles.sheetSubtitle}>
-              {t('choosePaymentProviderDesc', language)}
-            </Text>
-
-            <View style={styles.providerList}>
-              {PAYMENT_PROVIDERS.map(provider => {
-                const isSelected = selectedProvider === provider.id;
-
-                return (
-                  <TouchableOpacity
-                    key={provider.id}
-                    style={[
-                      styles.providerRow,
-                      isSelected && styles.providerRowSelected,
-                      !provider.enabled && styles.providerRowDisabled,
-                    ]}
-                    activeOpacity={provider.enabled ? 0.8 : 1}
-                    disabled={!provider.enabled || loading}
-                    onPress={() => setSelectedProvider(provider.id)}>
-
-                    <View style={[
-                      styles.providerIconWrap,
-                      isSelected && styles.providerIconWrapSelected,
-                    ]}>
-                      <Ionicons
-                        name={provider.icon}
-                        size={20}
-                        color={
-                          !provider.enabled
-                            ? '#CBD5E1'
-                            : isSelected
-                            ? colors.primary
-                            : colors.textSecondary
-                        }
-                      />
-                    </View>
-
-                    <Text style={[
-                      styles.providerName,
-                      !provider.enabled && styles.providerNameDisabled,
-                    ]}>
-                      {provider.name}
-                    </Text>
-
-                    {provider.enabled ? (
-                      <View style={[
-                        styles.radioOuter,
-                        isSelected && styles.radioOuterSelected,
-                      ]}>
-                        {isSelected && (
-                          <View style={styles.radioInner} />
-                        )}
-                      </View>
-                    ) : (
-                      <View style={styles.comingSoonBadge}>
-                        <Text style={styles.comingSoonText}>
-                          {t('comingSoon', language)}
-                        </Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.sheetContinueButton,
-                loading && styles.buttonDisabled,
-              ]}
-              activeOpacity={0.85}
-              disabled={loading}
-              onPress={() => {
-                setProviderModalVisible(false);
-
-                if (selectedProvider === 'tamara') {
-                  setEmail(user?.email || '');
-                  setEmailModalVisible(true);
-                } else if (selectedProvider === 'teller') {
-                  startTelrPayment();
-                }
-              }}>
-              <Text style={styles.sheetContinueText}>
-                {t('continue', language)}
-              </Text>
-            </TouchableOpacity>
-
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
 
       {/* ── Email Modal ── */}
       <Modal
@@ -1194,6 +1142,50 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
 
   methodTextBlock: {
     flex: 1,
+  },
+
+  brandIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  telrIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  networksRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+  },
+
+  tabbyTamaraIconWrap: {
+    alignItems: 'center',
+    gap: 4,
+    flexShrink: 0,
+  },
+
+  tamaraChip: {
+    height: 20,
+    paddingHorizontal: 4,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
   methodTitle: {

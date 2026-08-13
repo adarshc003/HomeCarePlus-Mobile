@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:1029682660067:android:5f294c2327913f36913bd6",
+        "android_client_info": {
+          "package_name": "com.hasasservices.homecare"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCaFBrGbPYh5plFuYXn1UXa8Yc5uwH9_m4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:1029682660067:android:fe1f44254f4e9542913bd6",
         "android_client_info": {
           "package_name": "com.hcare.partner"

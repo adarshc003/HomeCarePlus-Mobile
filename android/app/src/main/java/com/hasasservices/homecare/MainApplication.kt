@@ -1,4 +1,4 @@
-package com.homecareplus
+package com.hasasservices.homecare
 
 import android.app.Application
 import com.facebook.react.PackageList

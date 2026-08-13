@@ -16,9 +16,6 @@ import {
 import {useLanguageStore}
 from '../../store/languageStore';
 
-import {useThemeStore}
-from '../../store/themeStore';
-
 import {useTheme}
 from '../../hooks/useTheme';
 
@@ -33,6 +30,13 @@ import {
 }
 from '../../init/appInitializer';
 
+// Splash's only job is to get theme/language/auth state ready (via
+// appInitializer) and hand off to Home — catalog data (categories/
+// services/packages/add-ons) used to be prefetched here too, but nothing
+// on Home needs it before first paint, so it now loads lazily from the
+// screens that actually own it.
+const MIN_SPLASH_DURATION_MS = 500;
+
 const SplashScreen = ({
   navigation,
 }: any) => {
@@ -40,16 +44,6 @@ const SplashScreen = ({
   const language =
     useLanguageStore(
       state => state.language,
-    );
-
-  const loadLanguage =
-    useLanguageStore(
-      state => state.loadLanguage,
-    );
-
-  const loadThemeMode =
-    useThemeStore(
-      state => state.loadThemeMode,
     );
 
   const {colors} = useTheme();
@@ -62,41 +56,59 @@ const SplashScreen = ({
 
 useEffect(() => {
 
+let isMounted = true;
+
+const loopAnim = Animated.loop(
+  Animated.timing(
+    rotateAnim,
+    {
+      toValue: 1,
+      duration: 1200,
+      easing: Easing.linear,
+      useNativeDriver: true,
+    },
+  ),
+);
+
+loopAnim.start();
+
 const initialize = async () => {
-
-  loadLanguage();
-  loadThemeMode();
-
-  Animated.loop(
-    Animated.timing(
-      rotateAnim,
-      {
-        toValue: 1,
-        duration: 1200,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      },
-    ),
-  ).start();
 
   const start = Date.now();
 
-  await initializeApp();
+  // Only theme/language/auth gate navigation — every request that used to
+  // block here (categories, services, packages, add-ons) now loads lazily
+  // from the screen that actually renders it. A failure here (corrupted
+  // storage, a rejected AsyncStorage read) must never strand the user on
+  // this screen forever — log it and proceed to Home as a logged-out
+  // session rather than leaving navigation.replace() unreachable.
+  try {
+    await initializeApp();
+  } catch (error) {
+    console.log('Splash initialization error:', error);
+  }
 
   const elapsed = Date.now() - start;
 
-  if (elapsed < 2500) {
+  if (elapsed < MIN_SPLASH_DURATION_MS) {
     await new Promise<void>(resolve => {
       setTimeout(() => {
         resolve();
-      }, 2500 - elapsed);
+      }, MIN_SPLASH_DURATION_MS - elapsed);
     });
   }
 
-  navigation.replace('Home');
+  if (isMounted) {
+    navigation.replace('Home');
+  }
 };
 
     initialize();
+
+return () => {
+  isMounted = false;
+  loopAnim.stop();
+};
 
 }, []);
 

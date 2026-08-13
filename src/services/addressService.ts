@@ -36,3 +36,16 @@ export const updateAddress = (
     data,
   );
 };
+
+// Standalone check — does not create/modify an address. Used to re-confirm
+// a saved address's location is still inside an active service zone (ERP's
+// zones can change after the address was originally saved).
+export const validateAddressZone = (
+  latitude: number,
+  longitude: number,
+) => {
+  return API.post(
+    '/users/address/validate-zone',
+    {latitude, longitude},
+  );
+};

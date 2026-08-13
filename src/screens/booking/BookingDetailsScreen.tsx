@@ -16,6 +16,11 @@ import {
   Linking,
   Modal,
   Image,
+  TextInput,
+  Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 
 import {SafeAreaView} from 'react-native-safe-area-context';
@@ -43,13 +48,25 @@ import DetailRow from '../../components/booking/DetailRow';
 
 import BookingTimeline from '../../components/booking/BookingTimeline';
 
-import {getBookingById, getInvoice} from '../../services/bookingService';
+import {
+  getBookingById,
+  getInvoice,
+  cancelBooking,
+  submitReview,
+} from '../../services/bookingService';
+
+import {showSuccess, showError} from '../../utils/showToast';
+
+import {showDialog} from '../../components/dialog/FeedbackDialog';
+
+import StarRating from '../../components/review/StarRating';
 
 import {
   createTamaraCheckout,
   verifyTamaraPayment,
   createTelrCheckout,
   verifyTelrPayment,
+  pollPaymentStatus,
 } from '../../services/paymentService';
 
 import {InAppBrowser} from 'react-native-inappbrowser-reborn';
@@ -60,6 +77,46 @@ import {useBookingStore} from '../../store/bookingStore';
 
 import Ionicons from '@react-native-vector-icons/ionicons';
 
+if (
+  Platform.OS === 'android' &&
+  UIManager.setLayoutAnimationEnabledExperimental
+) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// Rotates a right-pointing chevron to point down when expanded (▶ → ▼) —
+// mirrors ProfileScreen's collapsible-section chevron for a consistent feel.
+const AnimatedChevron = ({
+  expanded,
+  color,
+}: {
+  expanded: boolean;
+  color: string;
+}) => {
+  const rotateAnim = React.useRef(
+    new Animated.Value(expanded ? 1 : 0),
+  ).current;
+
+  useEffect(() => {
+    Animated.timing(rotateAnim, {
+      toValue: expanded ? 1 : 0,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [expanded, rotateAnim]);
+
+  const rotate = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '90deg'],
+  });
+
+  return (
+    <Animated.View style={{transform: [{rotate}]}}>
+      <Ionicons name="chevron-forward" size={16} color={color} />
+    </Animated.View>
+  );
+};
+
 type Props = {
   route: RouteProp<RootStackParamList, 'BookingDetails'>;
 };
@@ -69,7 +126,11 @@ const BookingDetailsScreen = ({
   navigation,
 }: any) => {
 
-  const {bookingNumber} = route.params;
+  // route.params is always supplied by every current caller, but nothing
+  // enforces that (this screen is typed `any`) — guarding here prevents a
+  // future deep-link/push-navigation path that omits it from crashing on
+  // this destructure.
+  const {bookingNumber} = route.params ?? {};
 
   const language = useLanguageStore(
     state => state.language,
@@ -83,11 +144,28 @@ const BookingDetailsScreen = ({
   );
 
   const [booking, setBooking] = useState<any>(null);
+
+  // Guards against out-of-order responses: focus/AppState-active/the 20s
+  // poll/manual actions (cancel, retry payment) can all trigger
+  // loadBooking() independently, with no cancellation between them. A
+  // slower, earlier-issued request (e.g. a poll that started just before
+  // a cancel) resolving AFTER a newer one (the reload right after that
+  // cancel) would otherwise silently overwrite the correct, newer state
+  // with stale data.
+  const loadBookingRequestId = React.useRef(0);
+
+  // Lets the polling interval below skip fetching once the booking reaches
+  // a terminal state, without needing to recreate the interval itself (a
+  // ref, not a dependency, so this always reads the current status rather
+  // than the one captured when the interval was created).
+  const bookingStatusRef = React.useRef<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showQR, setShowQR] = useState(false);
 
   const [retryLoading, setRetryLoading] = useState(false);
+
+  const [cancelLoading, setCancelLoading] = useState(false);
 
   const [showTechnicianModal, setShowTechnicianModal] = useState(false);
 
@@ -95,6 +173,62 @@ const BookingDetailsScreen = ({
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoice, setInvoice] = useState<any>(null);
   const [invoiceError, setInvoiceError] = useState('');
+
+  const [reviewsExpanded, setReviewsExpanded] = useState(false);
+  const [draftRating, setDraftRating] = useState(0);
+  const [draftReview, setDraftReview] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+
+  const toggleReviews = () => {
+    LayoutAnimation.configureNext(
+      LayoutAnimation.Presets.easeInEaseOut,
+    );
+    setReviewsExpanded(!reviewsExpanded);
+  };
+
+  // The QR flow (VerificationModal) calls this exact same submitReview()
+  // service function — this is not a second review API, just a second
+  // entry point into it. ERP enforces "one submission only" and rejects a
+  // second call outright, so no client-side dedup logic is invented here.
+  const onSubmitReview = async () => {
+    if (draftRating < 1) {
+      showError(t('pleaseSelectARating', language));
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+
+      const response = await submitReview(
+        booking.id,
+        draftRating,
+        draftReview.trim(),
+      );
+
+      if (!response.success) {
+        showError(response.message || 'Unable to submit review.');
+        return;
+      }
+
+      setDraftRating(0);
+      setDraftReview('');
+
+      // Never fake the submitted review locally — reload from the backend
+      // so the displayed rating/review always reflects what ERP stored.
+      await loadBooking();
+
+      showSuccess(
+        t('reviewSubmittedSuccessfully', language),
+      );
+    } catch (error: any) {
+      showError(
+        error?.response?.data?.message ||
+          t('unableToSubmitReview', language),
+      );
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const onToggleInvoice = async () => {
     if (showInvoice) {
@@ -118,7 +252,7 @@ const BookingDetailsScreen = ({
     } catch (error: any) {
       setInvoiceError(
         error?.response?.data?.message ||
-          'Invoice not available yet.',
+          t('unableToLoadInvoice', language),
       );
     } finally {
       setInvoiceLoading(false);
@@ -143,6 +277,16 @@ const BookingDetailsScreen = ({
 
   useEffect(() => {
     const interval = setInterval(() => {
+      // Terminal bookings can no longer change — keep the interval alive
+      // (simpler than tearing it down and recreating it) but skip the
+      // actual network call once there's nothing left to refresh.
+      if (
+        bookingStatusRef.current === 'completed' ||
+        bookingStatusRef.current === 'cancelled'
+      ) {
+        return;
+      }
+
       loadBooking();
     }, 20000);
 
@@ -151,16 +295,28 @@ const BookingDetailsScreen = ({
     };
   }, [bookingNumber]);
 
+  useEffect(() => {
+    bookingStatusRef.current = booking?.status;
+  }, [booking?.status]);
+
   const loadBooking = async () => {
+    const requestId = ++loadBookingRequestId.current;
+
     try {
       const response = await getBookingById(bookingNumber);
+
+      if (requestId !== loadBookingRequestId.current) {
+        return;
+      }
 
       setBooking(response.booking);
       updateBooking(response.booking);
     } catch (error) {
       console.log(error);
     } finally {
-      setLoading(false);
+      if (requestId === loadBookingRequestId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -168,6 +324,50 @@ const BookingDetailsScreen = ({
     setRefreshing(true);
     await loadBooking();
     setRefreshing(false);
+  };
+
+  // ERP remains the source of truth — this only asks the backend to cancel,
+  // then reloads. loadBooking() already calls updateBooking(), which syncs
+  // the shared bookingStore.bookings array MyBookingsScreen reads from, so
+  // a single reload here refreshes both this screen and booking history.
+  const onCancelBooking = () => {
+    showDialog({
+      variant: 'warning',
+      title: 'Cancel Booking?',
+      description: 'Are you sure you want to cancel this booking?\n\nThis action cannot be undone.',
+      buttons: [
+        {text: 'Keep Booking', style: 'cancel'},
+        {
+          text: 'Cancel Booking',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setCancelLoading(true);
+
+              const response = await cancelBooking(booking.id);
+
+              if (!response.success) {
+                showError(
+                  response.message || 'Unable to cancel booking.',
+                );
+                return;
+              }
+
+              await loadBooking();
+
+              showSuccess('Booking cancelled successfully.');
+            } catch (error: any) {
+              showError(
+                error?.response?.data?.message ||
+                  'Unable to cancel booking.',
+              );
+            } finally {
+              setCancelLoading(false);
+            }
+          },
+        },
+      ],
+    });
   };
 
   const retryPayment = async () => {
@@ -181,6 +381,38 @@ const BookingDetailsScreen = ({
     try {
 
       setRetryLoading(true);
+
+      // Re-check the gateway's authoritative status before creating a
+      // brand-new checkout session. Without this, a prior payment that
+      // actually succeeded but the app never found out about (e.g. the
+      // app was killed right after paying, before its own verify call
+      // ran) would have a second checkout opened on retry — risking a
+      // second real charge. confirmPayment (called inside verifyPayment)
+      // is idempotent on gatewayOrderId, so this is safe even if the
+      // prior attempt genuinely did fail.
+      const precheck =
+        await verifyPayment(
+          booking.id,
+        );
+
+      if (
+        precheck.paymentStatus ===
+        'paid'
+      ) {
+
+        navigation.replace(
+          'BookingSuccess',
+          {
+            paymentMethod:
+              'ONLINE',
+            paymentStatus:
+              'PAID',
+          },
+        );
+
+        return;
+
+      }
 
       const response =
         await createCheckout(
@@ -215,7 +447,8 @@ const BookingDetailsScreen = ({
       }
 
       const verify =
-        await verifyPayment(
+        await pollPaymentStatus(
+          verifyPayment,
           booking.id,
         );
 
@@ -358,24 +591,28 @@ const BookingDetailsScreen = ({
       ? t('failed', language)
       : booking.paymentStatus;
 
+  // This app is Saudi-only — every displayed date/time must render in
+  // Asia/Riyadh regardless of the device's own timezone, or the same UTC
+  // instant would show a different day/hour depending on where the phone
+  // is set, which the customer never intended.
   const formattedDate = new Date(
     booking.bookingDate,
   ).toLocaleDateString(
     language === 'ar' ? 'ar-SA' : 'en-US',
-    {day: 'numeric', month: 'short', year: 'numeric'},
+    {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Riyadh'},
   );
 
   const bookingCreatedDate = booking.createdAt
     ? new Date(booking.createdAt).toLocaleDateString(
         language === 'ar' ? 'ar-SA' : 'en-US',
-        {day: 'numeric', month: 'short', year: 'numeric'},
+        {day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Asia/Riyadh'},
       )
     : null;
 
   const paymentCompletedDate = booking.paidAt
     ? new Date(booking.paidAt).toLocaleDateString(
         language === 'ar' ? 'ar-SA' : 'en-US',
-        {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'},
+        {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Riyadh'},
       )
     : null;
 
@@ -709,6 +946,35 @@ const hasCoordinates =
 
         </SectionCard>
 
+        {/* ── Cancel Booking ── */}
+        {['pending', 'pending_assignment', 'assigned'].includes(
+          booking.status,
+        ) && (
+          <TouchableOpacity
+            style={[
+              styles.cancelBookingButton,
+              cancelLoading && styles.cancelBookingButtonDisabled,
+            ]}
+            activeOpacity={0.85}
+            disabled={cancelLoading}
+            onPress={onCancelBooking}>
+            {cancelLoading ? (
+              <ActivityIndicator color="#DC2626" />
+            ) : (
+              <>
+                <Ionicons
+                  name="close-circle-outline"
+                  size={18}
+                  color="#DC2626"
+                />
+                <Text style={styles.cancelBookingButtonText}>
+                  Cancel Booking
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
         {/* ── Address ── */}
         <SectionCard title={t('address', language)}>
           <View style={styles.addressRow}>
@@ -1029,56 +1295,216 @@ const hasCoordinates =
           </SectionCard>
         )}
 
-        {/* ── Invoice (after completion + review) ── */}
-        {booking.status === 'completed' && booking.reviewSubmitted && (
-          <SectionCard title={t('invoice', language) || 'Invoice'}>
-            <TouchableOpacity
-              style={styles.qrButton}
-              activeOpacity={0.85}
-              onPress={onToggleInvoice}>
-              <Ionicons
-                name="document-text-outline"
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.qrButtonText}>
-                {showInvoice
-                  ? t('hideInvoice', language) || 'Hide Invoice'
-                  : t('viewInvoice', language) || 'View Invoice'}
-              </Text>
-            </TouchableOpacity>
-
-            {showInvoice && (
-              <View style={styles.invoiceBox}>
-                {invoiceLoading ? (
-                  <ActivityIndicator color="#4757E7" />
-                ) : invoiceError ? (
-                  <Text style={styles.info}>{invoiceError}</Text>
-                ) : invoice ? (
-                  <>
-                    {invoice.invoiceNumber && (
-                      <DetailRow
-                        label={t('invoiceNumber', language) || 'Invoice No.'}
-                        value={String(invoice.invoiceNumber)}
-                      />
-                    )}
-                    {invoice.invoiceDate && (
-                      <DetailRow
-                        label={t('bookingDate', language)}
-                        value={String(invoice.invoiceDate)}
-                      />
-                    )}
-                    {invoice.amount != null && (
-                      <DetailRow
-                        label={t('finalAmount', language)}
-                        value={`${t('currency', language)} ${invoice.amount}`}
-                      />
-                    )}
-                  </>
-                ) : null}
+        {/* ── Ratings & Reviews ── */}
+        <View style={styles.reviewsCard}>
+          <TouchableOpacity
+            style={styles.premiumHeader}
+            activeOpacity={0.75}
+            onPress={toggleReviews}>
+            <View style={styles.premiumHeaderLeft}>
+              <View style={styles.reviewsIconWrap}>
+                <Ionicons name="star" size={17} color="#F59E0B" />
               </View>
-            )}
-          </SectionCard>
+              <View style={styles.premiumHeaderTextBlock}>
+                <Text style={styles.premiumHeaderTitle}>
+                  {t('ratingsAndReviews', language)}
+                </Text>
+                <Text style={styles.premiumHeaderSubtitle}>
+                  {t('shareYourExperience', language)}
+                </Text>
+              </View>
+            </View>
+            <AnimatedChevron
+              expanded={reviewsExpanded}
+              color={colors.textHint}
+            />
+          </TouchableOpacity>
+
+          {reviewsExpanded && (
+            <View style={styles.reviewsBody}>
+              {!technician ? (
+                <View style={styles.infoNoticeBox}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.info}>
+                    {t('ratingsAvailableAfterAssignment', language)}
+                  </Text>
+                </View>
+              ) : booking.status !== 'completed' ? (
+                <View style={styles.infoNoticeBox}>
+                  <Ionicons
+                    name="information-circle-outline"
+                    size={16}
+                    color={colors.textSecondary}
+                  />
+                  <Text style={styles.info}>
+                    {t('ratingsAvailableAfterCompletion', language)}
+                  </Text>
+                </View>
+              ) : booking.reviewSubmitted ? (
+                <View style={styles.submittedReviewBox}>
+                  <Text style={styles.submittedReviewLabel}>
+                    {t('submittedReview', language)}
+                  </Text>
+
+                  <View style={styles.submittedStarsRow}>
+                    {[1, 2, 3, 4, 5].map(item => (
+                      <Ionicons
+                        key={item}
+                        name={
+                          item <= (booking.rating || 0)
+                            ? 'star-sharp'
+                            : 'star-outline'
+                        }
+                        size={22}
+                        color={
+                          item <= (booking.rating || 0)
+                            ? '#F59E0B'
+                            : '#CBD5E1'
+                        }
+                      />
+                    ))}
+                  </View>
+
+                  {booking.review ? (
+                    <Text style={styles.submittedReviewText}>
+                      "{booking.review}"
+                    </Text>
+                  ) : null}
+                </View>
+              ) : (
+                <>
+                  <StarRating
+                    rating={draftRating}
+                    onChange={setDraftRating}
+                  />
+
+                  <TextInput
+                    style={styles.reviewInput}
+                    placeholder={t('writeYourReview', language)}
+                    placeholderTextColor={colors.textHint}
+                    value={draftReview}
+                    onChangeText={setDraftReview}
+                    multiline
+                    maxLength={500}
+                  />
+
+                  <TouchableOpacity
+                    style={[
+                      styles.qrButton,
+                      (draftRating === 0 || submittingReview) &&
+                        styles.retryButtonDisabled,
+                    ]}
+                    activeOpacity={0.85}
+                    disabled={draftRating === 0 || submittingReview}
+                    onPress={onSubmitReview}>
+                    {submittingReview ? (
+                      <ActivityIndicator color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons
+                          name="star-outline"
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.qrButtonText}>
+                          {t('submitReview', language)}
+                        </Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
+        </View>
+
+        {/* ── Invoice (after completion) ── */}
+        {booking.status === 'completed' && (
+          <View style={styles.reviewsCard}>
+            <View style={styles.premiumHeader}>
+              <View style={styles.premiumHeaderLeft}>
+                <View style={styles.invoiceIconWrap}>
+                  <Ionicons name="document-text" size={17} color="#4757E7" />
+                </View>
+                <Text style={styles.premiumHeaderTitle}>
+                  {t('invoice', language)}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.reviewsBody}>
+              <TouchableOpacity
+                style={styles.qrButton}
+                activeOpacity={0.85}
+                onPress={onToggleInvoice}>
+                <Ionicons
+                  name={showInvoice ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.qrButtonText}>
+                  {showInvoice
+                    ? t('hideInvoice', language)
+                    : t('viewInvoice', language)}
+                </Text>
+              </TouchableOpacity>
+
+              {showInvoice && (
+                <View style={styles.invoiceBox}>
+                  {invoiceLoading ? (
+                    <ActivityIndicator color="#4757E7" />
+                  ) : invoiceError ? (
+                    <View style={styles.invoiceErrorRow}>
+                      <Ionicons
+                        name="alert-circle-outline"
+                        size={16}
+                        color="#DC2626"
+                      />
+                      <Text style={styles.invoiceErrorText}>
+                        {invoiceError}
+                      </Text>
+                    </View>
+                  ) : invoice ? (
+                    <>
+                      {invoice.invoiceNumber && (
+                        <DetailRow
+                          label={t('invoiceNumber', language)}
+                          value={String(invoice.invoiceNumber)}
+                        />
+                      )}
+                      {invoice.invoiceDate && (
+                        <DetailRow
+                          label={t('invoiceDate', language)}
+                          value={String(invoice.invoiceDate)}
+                        />
+                      )}
+                      {invoice.amount != null && (
+                        <DetailRow
+                          label={t('finalAmount', language)}
+                          value={`${t('currency', language)} ${invoice.amount}`}
+                        />
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.invoiceErrorRow}>
+                      <Ionicons
+                        name="document-outline"
+                        size={16}
+                        color={colors.textSecondary}
+                      />
+                      <Text style={styles.info}>
+                        {t('invoiceUnavailable', language)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          </View>
         )}
 
         {/* ── Back to home ── */}
@@ -2144,11 +2570,173 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
   },
 
   invoiceBox: {
-    marginTop: 14,
-    padding: 14,
+    padding: 16,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.divider,
+    backgroundColor: colors.background,
+  },
+
+  cancelBookingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 54,
+    borderRadius: 16,
+    marginBottom: 16,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+
+  cancelBookingButtonDisabled: {
+    opacity: 0.6,
+  },
+
+  cancelBookingButtonText: {
+    color: '#DC2626',
+    fontSize: 15,
+    fontFamily: Fonts.semiBold,
+  },
+
+  // ── Ratings & Reviews ─────────────────────────────────────────────────────
+  reviewsCard: {
+    backgroundColor: colors.card,
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    shadowOffset: {width: 0, height: 5},
+    elevation: 3,
+  },
+
+  // Shared premium accordion/card header — reused by both the Ratings &
+  // Reviews accordion and the Invoice card for a consistent, elevated feel.
+  premiumHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+
+  premiumHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+
+  premiumHeaderTextBlock: {
+    flex: 1,
+  },
+
+  premiumHeaderTitle: {
+    fontSize: 15,
+    fontFamily: Fonts.semiBold,
+    color: colors.textPrimary,
+  },
+
+  premiumHeaderSubtitle: {
+    marginTop: 2,
+    fontSize: 12,
+    fontFamily: Fonts.regular,
+    color: colors.textHint,
+  },
+
+  reviewsIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: '#FFFBEB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  invoiceIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: '#EEF2FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+
+  reviewsBody: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+    gap: 16,
+  },
+
+  infoNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: 14,
+  },
+
+  submittedReviewBox: {
+    gap: 10,
+  },
+
+  submittedReviewLabel: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    color: colors.textHint,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  submittedStarsRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+
+  submittedReviewText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    fontStyle: 'italic',
+    color: colors.textPrimary,
+    lineHeight: 21,
+    backgroundColor: colors.background,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.divider,
+  },
+
+  invoiceErrorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  invoiceErrorText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: '#DC2626',
+    lineHeight: 18,
+  },
+
+  reviewInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 14,
+    padding: 14,
+    minHeight: 90,
+    textAlignVertical: 'top',
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: colors.textPrimary,
     backgroundColor: colors.background,
   },
 });

@@ -16,6 +16,12 @@ import {useServiceStore} from '../../store/serviceStore';
 import {useLanguageStore} from '../../store/languageStore';
 import {Fonts} from '../../constants/fonts';
 import {useTheme} from '../../hooks/useTheme';
+import Skeleton from '../../components/skeleton/Skeleton';
+import {t} from '../../i18n';
+
+// Widths matched to the chip's real proportions (chip is width-to-content,
+// so this just varies enough to not look like a single repeated block).
+const SKELETON_CHIP_WIDTHS = [72, 96, 84, 104, 78];
 
 interface AnimatedChipProps {
   item: any;
@@ -121,8 +127,56 @@ const CategorySection = ({
     state => state.categories,
   );
 
+  const categoriesLoading = useCategoryStore(
+    state => state.loading,
+  );
+
+  const categoriesError = useCategoryStore(
+    state => state.error,
+  );
+
+  const loadCategories = useCategoryStore(
+    state => state.loadCategories,
+  );
+
   const {colors} = useTheme();
   const styles = createStyles(colors);
+
+  if (categoriesLoading && categories.length === 0) {
+    return (
+      <View style={styles.section}>
+        <View style={[styles.listContent, styles.skeletonRow]}>
+          {SKELETON_CHIP_WIDTHS.map((width, index) => (
+            <Skeleton
+              key={index}
+              width={width}
+              height={55}
+              borderRadius={22}
+            />
+          ))}
+        </View>
+      </View>
+    );
+  }
+
+  // categories.length === 0 alone is ambiguous — it's also true while
+  // genuinely empty. categoriesError distinguishes "the request failed" so
+  // this doesn't silently render as if there were simply no categories.
+  if (categoriesError && categories.length === 0) {
+    return (
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.retryChip}
+          activeOpacity={0.8}
+          onPress={() => loadCategories()}>
+          <Icon name="refresh-outline" size={15} color={colors.primary} />
+          <Text style={styles.retryText}>
+            {t('failedToLoadCategories', language)} · {t('retry', language)}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const allCategories = [
     {
@@ -177,6 +231,30 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     paddingHorizontal: 10,
     gap: 8,
     paddingRight: 20,
+  },
+
+  skeletonRow: {
+    flexDirection: 'row',
+  },
+
+  retryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    marginHorizontal: 20,
+    backgroundColor: `${colors.primary}1A`,
+    borderWidth: 1,
+    borderColor: `${colors.primary}33`,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 16,
+  },
+
+  retryText: {
+    color: colors.primary,
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
   },
 
   // ── Chip ─────────────────────────────────

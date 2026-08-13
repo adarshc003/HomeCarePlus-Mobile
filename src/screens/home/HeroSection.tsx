@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ImageBackground,
   Animated,
+  Image,
 } from 'react-native';
 
 import LinearGradient from 'react-native-linear-gradient';
@@ -128,6 +129,16 @@ const HeroSection = ({onExplore, scrollY}: any) => {
     return () => {
       if (autoTimer.current) clearInterval(autoTimer.current);
     };
+  }, []);
+
+  // Warms the native image cache for all 3 slides up front — without this,
+  // each autoplay cycle unmounts/remounts the ImageBackground (since only
+  // one slide is ever mounted at a time), which can re-hit the network and
+  // flash blank for whichever slide isn't already cached by the OS.
+  useEffect(() => {
+    SLIDES.forEach(item => {
+      Image.prefetch(item.image.uri).catch(() => {});
+    });
   }, []);
 
   const handleDotPress = (i: number) => {

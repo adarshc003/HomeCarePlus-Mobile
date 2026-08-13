@@ -51,6 +51,16 @@ export const getInvoice = async (
   return response.data;
 };
 
+export const cancelBooking = async (
+  bookingId: string,
+) => {
+  const response = await API.put(
+    `/bookings/${bookingId}/cancel`,
+  );
+
+  return response.data;
+};
+
 export const submitReview = async (
   bookingId: string,
   rating: number,

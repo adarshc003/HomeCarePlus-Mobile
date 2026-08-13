@@ -31,7 +31,16 @@ from '../screens/booking/BookingDetailsScreen';
 import NotificationScreen
 from '../screens/notification/NotificationScreen';
 
+import PrivacyPolicyScreen
+from '../screens/profile/PrivacyPolicyScreen';
+
+import HelpSupportScreen
+from '../screens/profile/HelpSupportScreen';
+
 import {navigationRef} from './navigationRef';
+
+import FeedbackDialogHost from '../components/dialog/FeedbackDialog';
+import {toastConfig} from '../components/toast/CustomToast';
 
 
 const Stack =
@@ -137,11 +146,22 @@ const RootNavigator = () => {
   component={NotificationScreen}
 />
 
+<Stack.Screen
+  name="PrivacyPolicy"
+  component={PrivacyPolicyScreen}
+/>
+
+<Stack.Screen
+  name="HelpSupport"
+  component={HelpSupportScreen}
+/>
+
         </Stack.Navigator>
       </NavigationContainer>
       
 
-      <Toast />
+      <Toast config={toastConfig} />
+      <FeedbackDialogHost />
     </>
   );
 };

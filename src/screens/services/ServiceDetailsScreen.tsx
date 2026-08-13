@@ -31,6 +31,8 @@ import {useAppDataStore} from '../../store/appDataStore';
 
 import {useOfferStore} from '../../store/offerStore';
 
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+
 const FEATURES = [
   'verifiedProfessionals',
   'sameDayService',
@@ -49,7 +51,11 @@ const ServiceDetailsScreen = ({
   navigation,
   route,
 }: any) => {
-  const {service} = route.params;
+  // route.params is always supplied by every current caller, but nothing
+  // enforces that (this screen is typed `any`) — guarding here prevents a
+  // future deep-link/push-navigation path that omits it from crashing on
+  // this destructure.
+  const {service} = route.params ?? {};
 
   const cachedPackages = useAppDataStore(
     state => state.packages[service.id],
@@ -70,8 +76,13 @@ const bookingSelectedPackage =
     state => state.selectedPackage,
   );
 
+// Never seed from the store's value directly — if the customer abandoned
+// a DIFFERENT service's booking without it being cleared, this would carry
+// that unrelated package (wrong price) silently into this one. The effect
+// below restores it only once confirmed to actually belong to this
+// service's own option list.
 const [selectedOption, setSelectedOption] =
-  useState<any>(bookingSelectedPackage);
+  useState<any>(null);
 
     useEffect(() => {
     if (cachedPackages) {
@@ -80,12 +91,15 @@ const [selectedOption, setSelectedOption] =
   }, [cachedPackages]);
 
   useEffect(() => {
-  if (bookingSelectedPackage) {
+  if (
+    bookingSelectedPackage &&
+    options.some(option => option.id === bookingSelectedPackage.id)
+  ) {
     setSelectedOption(
       bookingSelectedPackage,
     );
   }
-}, [bookingSelectedPackage]);
+}, [bookingSelectedPackage, options]);
   const setSelectedService = useBookingStore(
     state => state.setSelectedService,
   );
@@ -100,6 +114,7 @@ const [selectedOption, setSelectedOption] =
 
   const {colors, isDark} = useTheme();
   const styles = createStyles(colors);
+  const insets = useSafeAreaInsets();
 
   const serviceName = getLocalizedText(service?.name, language);
 
@@ -164,7 +179,13 @@ useEffect(() => {
 }, [navigation]);
 
   const handleBookNow = () => {
-    if (!selectedOption) {
+    // Defensive re-check, independent of the effect above — never proceed
+    // with a package that isn't actually in this service's own list.
+    const isValidSelection =
+      selectedOption &&
+      options.some(option => option.id === selectedOption.id);
+
+    if (!isValidSelection) {
       return;
     }
 
@@ -439,7 +460,7 @@ useEffect(() => {
       </Animated.ScrollView>
 
       {/* ── Sticky bottom bar ── */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, {bottom: 24 + insets.bottom}]}>
         <View style={styles.bottomLeft}>
           <Text style={styles.bottomLabel}>
             {t('selectedPackage', language)}

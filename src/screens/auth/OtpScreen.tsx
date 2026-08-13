@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 
 import {verifyOTP, sendOTP} from '../../services/firebaseAuth';
@@ -21,6 +23,10 @@ import {reregisterFCMToken} from '../../services/notificationService';
 
 import {useAuthStore} from '../../store/authStore';
 import {showSuccess, showError} from '../../utils/showToast';
+
+import {parsePhoneWithCountry} from '../../utils/phoneValidation';
+
+import {resolveOtpErrorKey} from '../../utils/authErrors';
 
 import {useLanguageStore} from '../../store/languageStore';
 
@@ -36,7 +42,14 @@ const OtpScreen = ({
   navigation,
   route,
 }: any) => {
-  const {phone, confirmation, redirectTo} = route.params;
+  // route.params is always supplied by every current caller, but nothing
+  // enforces that (this screen is typed `any`) — guarding here prevents a
+  // future deep-link/push-navigation path that omits it from crashing on
+  // this destructure.
+  // `confirmation` here is a lightweight `{verificationId}` session object
+  // (see services/firebaseAuth.ts), not a Firebase ConfirmationResult — kept
+  // under this param name to avoid touching the shared navigation types.
+  const {phone, confirmation, redirectTo} = route.params ?? {};
 
   const login = useAuthStore(state => state.login);
 
@@ -113,11 +126,14 @@ const OtpScreen = ({
 
       const result = await verifyOTP(currentConfirmation, otp);
 
-      console.log('Firebase User:', result.user.phoneNumber);
-
       const firebasePhone = result.user.phoneNumber;
 
-      const phoneWithoutCode = firebasePhone?.replace('+91', '');
+      // Strips whichever country code was actually used (Saudi Arabia or
+      // India), not a hardcoded one — a literal "+91" here left Saudi
+      // numbers with their full "+966..." prefix still attached.
+      const phoneWithoutCode = firebasePhone
+        ? parsePhoneWithCountry(firebasePhone).localNumber
+        : firebasePhone;
 
       // The backend now verifies this token itself and derives the phone
       // number from it — the phone above is sent only for logging and is
@@ -148,10 +164,19 @@ const OtpScreen = ({
     } catch (error: any) {
       console.log(error);
 
-      setError(error?.message || t('invalidOtp', language));
+      // Different failures need different user actions (resend, wait, fix
+      // the number) than a genuinely wrong code — showing the generic
+      // "Invalid OTP" message for all of them left users retyping a code
+      // that could never succeed.
+      const errorKey = resolveOtpErrorKey(error);
+      const message = errorKey
+        ? t(errorKey, language)
+        : error?.message || t('invalidOtp', language);
+
+      setError(message);
       triggerShake();
 
-      showError(t('failed', language), t('invalidOtp', language));
+      showError(t('failed', language), message);
     } finally {
       setLoading(false);
     }
@@ -161,14 +186,28 @@ const OtpScreen = ({
     try {
       setResendLoading(true);
 
-      const newConfirmation = await sendOTP(`+91${phone}`);
+      // `phone` (route param) is already the fully composed E.164 number
+      // set by LoginScreen (`${country.code}${phone}`) — it must not be
+      // re-prefixed here. Doing so previously broke resend for every
+      // non-Indian (Saudi) number. `forceResend: true` tells Firebase this
+      // is an intentional re-send of the same number, not a fresh request.
+      const newConfirmation = await sendOTP(phone, true);
 
       setCurrentConfirmation(newConfirmation);
       setTimer(30);
+      // The old code (if any was typed before resending) belongs to the
+      // now-invalidated confirmation above — leaving it in place invited
+      // the user to just tap Verify again with a code that can never work.
+      setOtp('');
+      setError('');
 
       showSuccess(t('otpSentTitle', language), t('newOtpSent', language));
     } catch (error) {
-      showError(t('failed', language), t('unableToResendOtp', language));
+      const errorKey = resolveOtpErrorKey(error);
+      showError(
+        t('failed', language),
+        errorKey ? t(errorKey, language) : t('unableToResendOtp', language),
+      );
     } finally {
       setResendLoading(false);
     }
@@ -201,7 +240,9 @@ const OtpScreen = ({
     });
 
   return (
-    <View style={styles.overlay}>
+    <KeyboardAvoidingView
+      style={styles.overlay}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.sheet}>
 
         {/* ── Handle ── */}
@@ -238,6 +279,15 @@ const OtpScreen = ({
             <Text style={styles.phone}> {phone}</Text>
           </View>
 
+          <TouchableOpacity
+            style={styles.changeBtn}
+            activeOpacity={0.75}
+            disabled={loading || resendLoading}
+            onPress={() => navigation.goBack()}>
+            <Text style={styles.changeBtnText}>
+              {t('changeNumber', language)}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── OTP dots (visual) + hidden input ── */}
@@ -341,7 +391,7 @@ const OtpScreen = ({
         </TouchableOpacity>
 
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

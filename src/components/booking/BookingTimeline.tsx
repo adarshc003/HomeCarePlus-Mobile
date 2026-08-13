@@ -17,6 +17,14 @@ import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 
 
+// A cancelled booking has no meaningful "how far did it get" position —
+// ERP only allows cancelling from pending/pending_assignment/assigned, so
+// the exact prior step is ambiguous, and showing it as "just confirmed"
+// (falling through to the default) misleadingly implied it was still
+// progressing. -1 never matches any step's `index <= current` check, so
+// every step renders as not-done instead of falsely showing progress.
+const CANCELLED_INDEX = -1;
+
 const getCurrentIndex = (
   status: string,
 ) => {
@@ -46,6 +54,9 @@ const getCurrentIndex = (
 
     case 'completed':
       return 4;
+
+    case 'cancelled':
+      return CANCELLED_INDEX;
 
     default:
       return 0;

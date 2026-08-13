@@ -5,6 +5,7 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 
 import {Fonts} from '../../constants/fonts';
@@ -25,6 +26,11 @@ interface OfferCardProps {
   applied?: boolean;
 
   isLast?: boolean;
+
+  // True while ANY offer/coupon apply request is in flight (not just this
+  // card's own) — disables every card's button so a second tap (on this
+  // card or a different one) can't fire a concurrent apply request.
+  applying?: boolean;
 }
 
 const OfferCard = ({
@@ -33,6 +39,7 @@ const OfferCard = ({
   onRemove,
   applied = false,
   isLast = false,
+  applying = false,
 }: OfferCardProps) => {
   const language =
     useLanguageStore(
@@ -119,8 +126,10 @@ const OfferCard = ({
         style={[
           styles.button,
           applied && styles.appliedButton,
+          applying && styles.buttonDisabled,
         ]}
         activeOpacity={0.75}
+        disabled={applying}
         onPress={() => {
           if (applied) {
             onRemove?.();
@@ -128,23 +137,32 @@ const OfferCard = ({
             onApply(offer);
           }
         }}>
-        {applied && (
-          <Icon
-            name="checkmark-circle"
-            size={15}
-            color={colors.primary}
-            style={styles.buttonIcon}
+        {applying ? (
+          <ActivityIndicator
+            size="small"
+            color={applied ? colors.primary : '#FFFFFF'}
           />
+        ) : (
+          <>
+            {applied && (
+              <Icon
+                name="checkmark-circle"
+                size={15}
+                color={colors.primary}
+                style={styles.buttonIcon}
+              />
+            )}
+            <Text
+              style={[
+                styles.buttonText,
+                applied && styles.appliedText,
+              ]}>
+              {applied
+                ? t('remove', language)
+                : t('apply', language)}
+            </Text>
+          </>
         )}
-        <Text
-          style={[
-            styles.buttonText,
-            applied && styles.appliedText,
-          ]}>
-          {applied
-            ? t('remove', language)
-            : t('apply', language)}
-        </Text>
       </TouchableOpacity>
 
     </View>
@@ -287,6 +305,10 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     backgroundColor: '#EEF2FF',
     borderWidth: 1,
     borderColor: '#C7CEFF',
+  },
+
+  buttonDisabled: {
+    opacity: 0.6,
   },
 
   buttonIcon: {
