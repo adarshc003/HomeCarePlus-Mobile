@@ -8,14 +8,15 @@ require Pod::Executable.execute_command('node', ['-p',
 platform :ios, min_ios_version_supported
 prepare_react_native_project!
 
-linkage = ENV['USE_FRAMEWORKS']
-if linkage != nil
-  Pod::UI.puts "Configuring Pod with #{linkage}ally linked Frameworks".green
-  use_frameworks! :linkage => linkage.to_sym
-end
-
 target 'HomeCarePlus' do
   config = use_native_modules!
+
+  # Required for @react-native-firebase/* on RN 0.81: Firebase's Swift pods
+  # (e.g. FirebaseCoreInternal) import GoogleUtilities, which does not declare
+  # DEFINES_MODULE. Under CocoaPods' default static linkage that import fails
+  # to resolve. use_frameworks! forces every pod to build as a framework,
+  # which always gets a module map, resolving it. See https://rnfirebase.io/ios-spm
+  use_frameworks! :linkage => :dynamic
 
   use_react_native!(
     :path => config[:reactNativePath],
