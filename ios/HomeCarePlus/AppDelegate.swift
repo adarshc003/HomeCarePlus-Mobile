@@ -3,6 +3,7 @@ import React
 import React_RCTAppDelegate
 import ReactAppDependencyProvider
 import FirebaseCore
+import FirebaseAuth
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -34,6 +35,20 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
     return true
   }
+
+
+func application(
+  _ app: UIApplication,
+  open url: URL,
+  options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+) -> Bool {
+
+  if Auth.auth().canHandle(url) {
+    return true
+  }
+
+  return false
+}
 }
 
 class ReactNativeDelegate: RCTDefaultReactNativeFactoryDelegate {
