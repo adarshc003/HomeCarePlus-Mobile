@@ -1,5 +1,10 @@
 export default {
 
+  whatsappSupportButtonLabel: 'تواصل مع الدعم عبر واتساب',
+  whatsappDefaultMessage: 'مرحباً فريق هوم كير بلس، أحتاج إلى المساعدة.',
+  whatsappNotInstalledTitle: 'واتساب غير متاح',
+  whatsappNotInstalledMessage: 'واتساب غير مثبت على هذا الجهاز.',
+
   // ── General ──────────────────────────────────────────────────────────────
   continue: 'متابعة',
   cancel: 'إلغاء',

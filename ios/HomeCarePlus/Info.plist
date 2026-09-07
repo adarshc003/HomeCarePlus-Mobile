@@ -31,6 +31,10 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+<key>LSApplicationQueriesSchemes</key>
+<array>
+	<string>whatsapp</string>
+</array>
 <key>NSLocationWhenInUseUsageDescription</key>
 <string>Location access is required to select and save service addresses.</string>
 <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

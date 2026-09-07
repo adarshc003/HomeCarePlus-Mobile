@@ -22,6 +22,10 @@ export default {
   goBack: 'Go back',
   version: 'Version',
   customer: 'Customer',
+  whatsappSupportButtonLabel: 'Chat with support on WhatsApp',
+  whatsappDefaultMessage: 'Hello HomeCarePlus Support, I need assistance.',
+  whatsappNotInstalledTitle: 'WhatsApp Not Available',
+  whatsappNotInstalledMessage: 'WhatsApp is not installed on this device.',
 
   // ── Authentication ────────────────────────────────────────────────────────
   welcome: 'Welcome',

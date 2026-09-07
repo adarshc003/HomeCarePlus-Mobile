@@ -15,6 +15,16 @@
          reCAPTCHA verification path. -->
     <queries>
         <package android:name="com.android.vending" />
+        <!-- Required on Android 11+ (API 30+) package-visibility rules so
+             Linking.canOpenURL() can correctly detect WhatsApp/WhatsApp
+             Business for the floating support button — without this it
+             always reports "not installed" even when the app is present. -->
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
     </queries>
 
     <application

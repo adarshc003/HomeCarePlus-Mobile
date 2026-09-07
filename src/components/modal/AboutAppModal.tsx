@@ -3,13 +3,12 @@ import React from 'react';
 import {
   Modal,
   View,
+  Image,
   Text,
   StyleSheet,
   TouchableOpacity,
   Linking,
 } from 'react-native';
-
-import Ionicons from '@react-native-vector-icons/ionicons';
 
 import {Fonts} from '../../constants/fonts';
 
@@ -24,7 +23,7 @@ interface Props {
   onClose: () => void;
 }
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.9';
 
 const AboutAppModal = ({visible, onClose}: Props) => {
 
@@ -47,10 +46,10 @@ const AboutAppModal = ({visible, onClose}: Props) => {
         <View style={styles.container}>
 
           <View style={styles.iconWrap}>
-            <Ionicons
-              name="home"
-              size={34}
-              color={colors.primary}
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
             />
           </View>
 
@@ -125,6 +124,11 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       justifyContent: 'center',
       alignItems: 'center',
       marginBottom: 16,
+    },
+
+    logo: {
+      width: 48,
+      height: 48,
     },
 
     appName: {

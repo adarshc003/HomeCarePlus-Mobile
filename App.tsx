@@ -5,6 +5,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import NotificationProvider from './src/providers/NotificationProvider';
 
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import {SafeAreaProvider} from 'react-native-safe-area-context';
 
 import {useTheme} from './src/hooks/useTheme';
 
@@ -43,13 +44,15 @@ const App = () => {
 return (
   <GestureHandlerRootView
     style={{flex: 1}}>
-    <StatusBar
-      barStyle={colors.statusBarStyle}
-      backgroundColor={colors.background}
-    />
-    <NotificationProvider>
-      <RootNavigator />
-    </NotificationProvider>
+    <SafeAreaProvider>
+      <StatusBar
+        barStyle={colors.statusBarStyle}
+        backgroundColor={colors.background}
+      />
+      <NotificationProvider>
+        <RootNavigator />
+      </NotificationProvider>
+    </SafeAreaProvider>
   </GestureHandlerRootView>
 );
 };

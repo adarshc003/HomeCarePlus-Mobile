@@ -489,7 +489,7 @@ const ProfileScreen = ({navigation}: any) => {
 
       {/* ── Version ── */}
       <Text style={styles.version}>
-        {t('version', language)} 1.0.0
+        {t('version', language)} 1.0.9
       </Text>
 
       <AboutAppModal

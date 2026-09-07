@@ -1,4 +1,4 @@
-import React from 'react';
+import React, {useState} from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 
@@ -41,16 +41,31 @@ import {navigationRef} from './navigationRef';
 
 import FeedbackDialogHost from '../components/dialog/FeedbackDialog';
 import {toastConfig} from '../components/toast/CustomToast';
+import WhatsAppSupportButton from '../components/support/WhatsAppSupportButton';
 
 
 const Stack =
   createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator = () => {
+  const [currentRoute, setCurrentRoute] = useState<
+    string | undefined
+  >('Splash');
+
   return (
     <>
       <NavigationContainer
-  ref={navigationRef}>
+  ref={navigationRef}
+  onReady={() => {
+    setCurrentRoute(
+      navigationRef.getCurrentRoute()?.name,
+    );
+  }}
+  onStateChange={() => {
+    setCurrentRoute(
+      navigationRef.getCurrentRoute()?.name,
+    );
+  }}>
         <Stack.Navigator
           initialRouteName="Splash"
           screenOptions={{
@@ -162,6 +177,7 @@ const RootNavigator = () => {
 
       <Toast config={toastConfig} />
       <FeedbackDialogHost />
+      <WhatsAppSupportButton currentRoute={currentRoute} />
     </>
   );
 };
