@@ -135,9 +135,28 @@ const ProfileScreen = ({navigation}: any) => {
   };
 
   const handleApplyLanguage = async () => {
-    if (pendingLanguage !== language) {
+    const isSwitchingLanguage = pendingLanguage !== language;
+
+    if (isSwitchingLanguage) {
       await setLanguage(pendingLanguage);
     }
+
+    // A language switch flips isRTL app-wide (flexDirection 'row' <->
+    // 'row-reverse') across every still-mounted screen, not just this
+    // dropdown — native-stack keeps prior screens mounted even off-screen.
+    // On iOS, stacking a LayoutAnimation-driven collapse of this dropdown
+    // right on top of that global LTR->RTL re-layout is what left the app
+    // stuck (only fixed by a full relaunch, which lays the RTL tree out
+    // fresh with nothing mid-flight). Skipping the animation only for this
+    // switch — only on iOS, only when the language actually changed — avoids
+    // that without touching the already-working Android behavior below, or
+    // the theme toggle / plain expand-collapse animations elsewhere in this
+    // screen.
+    if (Platform.OS === 'ios' && isSwitchingLanguage) {
+      setActiveSection(null);
+      return;
+    }
+
     animate();
     setActiveSection(null);
   };

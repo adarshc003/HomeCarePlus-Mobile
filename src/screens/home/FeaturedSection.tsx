@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ImageBackground,
+  Platform,
 } from 'react-native';
 
 import LinearGradient from 'react-native-linear-gradient';
@@ -481,17 +482,32 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     fontFamily: Fonts.semiBold,
     letterSpacing: 0.2,
   },
-  /* Fade gradient — image dissolves into white card body */
-  fadeGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 220,
-    justifyContent: 'flex-end',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
+  /* Fade gradient — image dissolves into white card body.
+     iOS renders this gradient slightly misaligned with the shared values
+     (visible seam/gap at the image edges), so it gets its own offsets;
+     Android keeps the original, already-correct values untouched. */
+  fadeGradient: Platform.select({
+    ios: {
+      position: 'absolute',
+      bottom: -6,
+      left: -6,
+      right: -6,
+      height: 250,
+      justifyContent: 'flex-end',
+      paddingHorizontal: 0,
+      paddingBottom: 0,
+    },
+    default: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 220,
+      justifyContent: 'flex-end',
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+    },
+  }),
   cardTitle: {
     color: colors.textPrimary,
     fontSize: 26,
@@ -499,11 +515,13 @@ const createStyles = (colors: ReturnType<typeof useTheme>['colors']) => StyleShe
     letterSpacing: -0.6,
     lineHeight: 32,
     marginBottom: 8,
+    ...Platform.select({ios: {left: 15}, default: {}}),
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 6,
+    ...Platform.select({ios: {left: 15}, default: {}}),
   },
   priceLabel: {
     color: colors.textSecondary,

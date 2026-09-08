@@ -156,10 +156,22 @@ const OtpScreen = ({
 
       showSuccess(t('loginSuccessful', language), t('welcomeBack', language));
 
-      if (redirectTo) {
-        navigation.replace(redirectTo);
+      const targetRoute = redirectTo || 'Home';
+
+      // Login/Otp are presented as transparentModal (RootNavigator). On iOS,
+      // react-native-screens' native-stack leaves the underlying screen with
+      // a stale frame/safe-area when replacing out of a presented modal
+      // (fixed only by a full relaunch) — resetting the stack instead of
+      // replacing avoids that stale modal-presentation context. Android's
+      // fragment-based presentation never hit this, so it keeps the
+      // existing, already-working replace() behavior untouched.
+      if (Platform.OS === 'ios') {
+        navigation.reset({
+          index: 0,
+          routes: [{name: targetRoute}],
+        });
       } else {
-        navigation.replace('Home');
+        navigation.replace(targetRoute);
       }
     } catch (error: any) {
       console.log(error);
@@ -299,6 +311,7 @@ const OtpScreen = ({
           <TextInput
             placeholder=""
             keyboardType="number-pad"
+            autoFocus={Platform.OS === 'ios'}
             maxLength={6}
             value={otp}
             onChangeText={text => {
