@@ -102,6 +102,22 @@
 
     </dict>
 
+    <dict>
+
+        <key>CFBundleURLName</key>
+
+        <string>FirebaseAuth</string>
+
+        <key>CFBundleURLSchemes</key>
+
+        <array>
+
+            <string>app-1-1029682660067-ios-35c8ff69515a0cb1913bd6</string>
+
+        </array>
+
+    </dict>
+
 </array>
 
 </dict>
