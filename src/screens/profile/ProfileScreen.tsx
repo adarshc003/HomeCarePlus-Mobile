@@ -20,7 +20,7 @@ import {LEGAL_DOCUMENT_URLS} from '../../constants/legalDocuments';
 
 import {useAuthStore} from '../../store/authStore';
 import {unregisterCurrentToken} from '../../services/notificationService';
-import {getProfile} from '../../services/userService';
+import {getProfile, deleteAccount} from '../../services/userService';
 import {useLanguageStore} from '../../store/languageStore';
 import {useThemeStore, ThemeMode} from '../../store/themeStore';
 import {useTheme} from '../../hooks/useTheme';
@@ -28,6 +28,8 @@ import {t} from '../../i18n';
 import {Fonts} from '../../constants/fonts';
 import Ionicons from '@react-native-vector-icons/ionicons';
 import AboutAppModal from '../../components/modal/AboutAppModal';
+import {showDialog} from '../../components/dialog/FeedbackDialog';
+import {showSuccess, showError} from '../../utils/showToast';
 
 if (
   Platform.OS === 'android' &&
@@ -201,6 +203,35 @@ const ProfileScreen = ({navigation}: any) => {
     navigation.replace('Home');
   };
 
+  const handleDeleteAccount = () => {
+    showDialog({
+      variant: 'warning',
+      title: t('deleteAccountConfirmTitle', language),
+      description: t('deleteAccountConfirmMessage', language),
+      buttons: [
+        {text: t('cancel', language), style: 'cancel'},
+        {
+          text: t('deleteAccountConfirmButton', language),
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteAccount();
+              await unregisterCurrentToken();
+              await logout();
+              navigation.replace('Home');
+              showSuccess(t('deleteAccountSuccessMessage', language));
+            } catch (error: any) {
+              showError(
+                error?.response?.data?.message ||
+                  'Unable to delete account.',
+              );
+            }
+          },
+        },
+      ],
+    });
+  };
+
   // Opens the website's Terms & Conditions page directly — no in-app
   // language choice anymore, it's whatever LEGAL_DOCUMENT_URLS points to.
   const handleOpenTermsAndConditions = async () => {
@@ -266,6 +297,13 @@ const ProfileScreen = ({navigation}: any) => {
       icon: 'log-out-outline',
       labelKey: 'logout',
       onPress: handleLogout,
+      danger: true,
+    },
+    {
+      key: 'deleteAccount',
+      icon: 'trash-outline',
+      labelKey: 'deleteAccountMenuItem',
+      onPress: handleDeleteAccount,
       danger: true,
     },
   ];

@@ -37,3 +37,8 @@ export const updateName = async (
   return response.data;
 
 };
+
+export const deleteAccount = async () => {
+  const response = await API.delete('/users/account');
+  return response.data;
+};

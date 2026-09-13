@@ -13,9 +13,11 @@ import {useLanguageStore} from '../../store/languageStore';
 import {t} from '../../i18n';
 import {SUPPORT_WHATSAPP_NUMBER} from '../../constants/supportContact';
 
-// Screens where the button should stay hidden — pre-authentication /
-// transient screens the user hasn't "entered the app" on yet.
-const HIDDEN_ROUTES = ['Splash', 'Login', 'Otp'];
+// Only show the button on the Home tab. navigationRef.getCurrentRoute()
+// resolves to the leaf route, which for the nested Home stack screen ->
+// BottomTabs is 'HomeTab' when that tab is active (vs 'BookingsTab' /
+// 'ProfileTab' for the other tabs, or the pushed stack screens' own names).
+const VISIBLE_ROUTES = ['HomeTab'];
 
 interface Props {
   currentRoute?: string;
@@ -29,7 +31,7 @@ const WhatsAppSupportButton = ({currentRoute}: Props) => {
   const insets = useSafeAreaInsets();
   const scale = useRef(new Animated.Value(1)).current;
 
-  if (currentRoute && HIDDEN_ROUTES.includes(currentRoute)) {
+  if (!currentRoute || !VISIBLE_ROUTES.includes(currentRoute)) {
     return null;
   }
 
